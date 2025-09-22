@@ -33,7 +33,7 @@ By combining intent recognition, vision-based action execution, and contextual a
 
 | Contributor                                                                 | Role & Tools                                                                                          | Notable Contributions                                                   |
 | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| [**Sachin Gupta**](https://github.com/your-github) <br/><i>Project Lead</i> | Full-stack SWE/ML · Python · JavaScript · React · AWS · Chrome Extension APIs | Ideation, design, and sole development of InterfaceAI |
+| [**Sachin Gupta**](https://github.com/your-github) <br/><i>Project Lead</i> | Full-stack SWE/ML · Python · JavaScript · React · AWS · Chrome Extension APIs | Ideation |
 
 ---
 
