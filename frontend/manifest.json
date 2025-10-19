@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "InterfaceAI MVP",
+  "version": "0.1.0",
+  "description": "Minimal Chrome extension frontend for InterfaceAI",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "InterfaceAI"
+  },
+  "permissions": [],
+  "host_permissions": [
+    "http://localhost:5000/*"
+  ]
+}

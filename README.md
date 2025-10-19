@@ -39,3 +39,81 @@ By combining intent recognition, vision-based action execution, and contextual a
 
 ## For More Information...
 ### [View the Project Roadmap](./PROJECT-ROADMAP.md)
+
+---
+
+## 🧪 Local Development (Docker)
+
+### Services
+- **backend:** Flask API at `http://localhost:5000` (`backend/app/main.py`)
+- **playwright:** Minimal Python worker (`playwright/worker.py`)
+- **vision-ai:** Minimal Flask service (`vision-ai/service.py`)
+- **redis:** Cache/queue at `localhost:6379`
+- **postgres:** DB at `localhost:5432` with init script `scripts/init_db.sql`
+
+### Run
+```bash
+docker compose up --build
+```
+
+Health checks:
+- Backend: `GET http://localhost:5000/health`
+- Relay: `POST http://localhost:5000/api/relay` with `{ "message": "hello" }`
+
+To stop:
+```bash
+docker compose down
+```
+
+---
+
+## 🧩 Chrome Extension Frontend
+
+This repo includes a minimal Chrome extension UI in `frontend/`:
+- `frontend/manifest.json`
+- `frontend/popup.html`
+- `frontend/popup.js`
+
+The popup sends a POST to `http://localhost:5000/api/relay` and displays the response. CORS and `host_permissions` are configured to allow this in development.
+
+### Load the Extension
+1. Open Chrome and go to `chrome://extensions`.
+2. Toggle on "Developer mode" (top-right).
+3. Click "Load unpacked" and select the `frontend/` directory.
+4. Click the extension icon (puzzle piece) → pin "InterfaceAI MVP".
+5. Open the popup, type a message, and click "Send to backend".
+
+If you see CORS issues, ensure Docker services are running and the backend is reachable at `http://localhost:5000`.
+
+---
+
+## 📁 Repository Layout
+
+```
+interface-ai/
+├── docker-compose.yml
+├── backend/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── app/
+│       └── main.py
+├── frontend/
+│   ├── manifest.json
+│   ├── popup.html
+│   └── popup.js
+├── playwright/
+│   ├── Dockerfile
+│   └── worker.py
+├── vision-ai/
+│   ├── Dockerfile
+│   └── service.py
+└── scripts/
+    └── init_db.sql
+```
+
+---
+
+## 🧰 Notes
+- Backend CORS allows `http://localhost:*` and `chrome-extension://*` for simple dev flow.
+- Update `frontend/manifest.json` `host_permissions` if backend URL changes.
+- Postgres credentials are development defaults; change for production.

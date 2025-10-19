@@ -1,0 +1,52 @@
+version: "3.9"
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://user:password@postgres:5432/interfaceai
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - redis
+      - postgres
+
+  playwright:
+    build: ./playwright
+    depends_on:
+      - backend
+    environment:
+      - BACKEND_URL=http://backend:5000
+
+  vision-ai:
+    build: ./vision-ai
+    depends_on:
+      - backend
+    environment:
+      - BACKEND_URL=http://backend:5000
+    profiles:
+      - vision
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=interfaceai
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+
+volumes:
+  pgdata:
