@@ -21,11 +21,9 @@ By combining intent recognition, vision-based action execution, and contextual a
 
 ### 🛠️ Technologies
 - **Frontend:** React + Chrome Extension APIs
-- **Backend / Infra:** Node.js, Express, Firebase (Auth, Firestore)
-- **ML / AI:** OpenAI API, Custom Intent Recognition Models, OCR / Vision Models
-- **Automation:** Puppeteer / Playwright, DOM action pipeline
-- **Hosting / Deployment:** AWS / Vercel
-- **Other:** WebRTC (future collaboration), Secure Local Storage
+- **Backend / Infra:** Flask, SQL
+- **ML / AI:** Google Gemini API, OCR / Vision Models
+- **Hosting / Deployment:** GCP (Cloud Run to easily deploy our docker containers, BigTable, BigQuery)
 
 ---
 
@@ -33,7 +31,7 @@ By combining intent recognition, vision-based action execution, and contextual a
 
 | Contributor                                                                 | Role & Tools                                                                                          | Notable Contributions                                                   |
 | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| [**Sachin Gupta**](https://github.com/your-github) <br/><i>Project Lead</i> | Python · React · AWS | Ideation |
+| [**Sachin Gupta**](https://github.com/SachinVedGupta) <br/><i>Project Lead</i> | Python · PyTorch · GCP | Ideation |
 
 ---
 
@@ -45,6 +43,7 @@ By combining intent recognition, vision-based action execution, and contextual a
 ## 🧪 Local Development (Docker)
 
 ### Services
+- **frontend:** Chrome Extension (`frontend`)
 - **backend:** Flask API at `http://localhost:5000` (`backend/app/main.py`)
 - **playwright:** Minimal Python worker (`playwright/worker.py`)
 - **vision-ai:** Minimal Flask service (`vision-ai/service.py`)
@@ -69,7 +68,7 @@ docker compose down
 
 ## 🧩 Chrome Extension Frontend
 
-This repo includes a minimal Chrome extension UI in `frontend/`:
+This repo includes a Chrome extension UI in `frontend/`:
 - `frontend/manifest.json`
 - `frontend/popup.html`
 - `frontend/popup.js`
