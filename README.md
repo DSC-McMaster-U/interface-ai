@@ -37,6 +37,7 @@ By combining intent recognition, vision-based action execution, and contextual a
 
 ## For More Information...
 ### [View the Project Roadmap](./PROJECT-ROADMAP.md)
+### [View the DevOps Cheatsheet](./DEVOPS.md)
 
 ---
 
