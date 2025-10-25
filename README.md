@@ -32,7 +32,7 @@ By combining intent recognition, vision-based action execution, and contextual a
 | Contributor                                                                 | Role & Tools                                                                                          | Notable Contributions                                                   |
 | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
 | [**Sachin Gupta**](https://github.com/SachinVedGupta) <br/><i>Project Lead</i> | Python · PyTorch · GCP | Ideation |
-
+| [**Luna Aljammal**](https://github.com/luna-aljammal) <br/><i>Backend + DB</i> | Python · Flask · Redis · GCP | | |
 ---
 
 ## For More Information...
