@@ -31,12 +31,17 @@ By combining intent recognition, vision-based action execution, and contextual a
 
 ## Contributor 👨‍💻
 
+| Contributor                                                                 | Role & Tools                                                                                          | Notable Contributions                                                   |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| [**Sachin Gupta**](https://github.com/SachinVedGupta) <br/><i>Project Lead</i> | Python · PyTorch · GCP | Ideation |
+| [**Andrew Wu**](https://github.com/andrewwu13) <br/><i>Frontend</i> |  |  |
 | Contributor                                                                    | Role & Tools                                  | Notable Contributions |
 | ------------------------------------------------------------------------------ | --------------------------------------------- | --------------------- |
 | [**Sachin Gupta**](https://github.com/SachinVedGupta) <br/><i>Project Lead</i> | Python · PyTorch · GCP                        | Ideation              |
 | [**Adrian Najmi**](https://github.com/adriancoder06) <br/><i>AI</i>            | Python · PyTorch · Playwright · Tesseract OCR | Ideation              |
 | [**Hassan Ibrahim**](https://github.com/Hassan-Ibrahim-1) <br/><i>Backend</i>  | Python · Flask                                | DB                    |
 | [**Luna Aljammal**](https://github.com/luna-aljammal) <br/><i>Backend + DB</i> | Python · Flask · Redis · GCP                  | DB                    |
+| [**Andrew Wu**](https://github.com/andrewwu13) <br/><i>Frontend</i>            | Javascript                                    | UI                    |
 
 ---
 
