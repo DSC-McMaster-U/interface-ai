@@ -40,7 +40,7 @@ By combining intent recognition, vision-based action execution, and contextual a
 |  | [**Andrew Wu**](https://github.com/andrewwu13) <br/><i>Frontend</i> | JavaScript | UI & Frontend Development |
 |  |  |  |  |
 |  |  |  |  |
-|  |  |  |  |
+|  | [**David Olejniczak**](https://github.com/davidolejniczak) <br/><i>CI/CD + Cloud</i> | CGP · Docker · Github Actions | CI/CD |
 |  |  |  |  |
 |  |  |  |  |
 |  |  |  |  |
