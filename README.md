@@ -38,7 +38,7 @@ By combining intent recognition, vision-based action execution, and contextual a
 |  | [**Hassan Ibrahim**](https://github.com/Hassan-Ibrahim-1) <br/><i>Backend</i> | Python · Flask | Database Design |
 |  | [**Luna Aljammal**](https://github.com/luna-aljammal) <br/><i>Backend + DB</i> | Python · Flask · Redis · GCP | Database Integration |
 |  | [**Andrew Wu**](https://github.com/andrewwu13) <br/><i>Frontend</i> | JavaScript | UI & Frontend Development |
-|  |  |  |  |
+|  | [**Mohit Gedela**](https://github.com/MohitGedela) <br/><i>Vision AI</i> | Python · Java · JavaScript | Vision AI Development |
 |  |  |  |  |
 |  | [**David Olejniczak**](https://github.com/davidolejniczak) <br/><i>CI/CD + Cloud</i> | CGP · Docker · Github Actions | CI/CD |
 |  |  |  |  |
