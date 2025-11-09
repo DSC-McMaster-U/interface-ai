@@ -1,5 +1,6 @@
 import os
 import time
+
 import requests
 
 BACKEND = os.getenv("BACKEND_URL", "http://backend:5000")

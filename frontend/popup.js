@@ -9,7 +9,7 @@ async function send() {
     const res = await fetch(API, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message })
+      body: JSON.stringify({ message }),
     });
     const data = await res.json();
     out.textContent = `Response: ${data.echo}`;

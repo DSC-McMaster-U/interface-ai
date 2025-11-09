@@ -1,4 +1,6 @@
-# InterfaceAI Dev Ops Cheatsheet
+# InterfaceAI DevOps Guide
+
+Quick reference for development, formatting, linting, testing, and Docker operations.
 
 ## Run a specific Docker container
 - **Start one service (build if needed)**
@@ -107,7 +109,81 @@ curl http://localhost:5000/health
 curl -X POST http://localhost:5000/api/relay -H "Content-Type: application/json" -d "{\"message\":\"world\"}"
 ```
 
+## Code Quality & Testing
+
+### Setup
+```bash
+# Install Python dev tools
+pip install -r dev-requirements.txt
+```
+
+### Commands
+
+**Check for issues (does NOT modify files):**
+
+**Linux/Mac:**
+```bash
+make check  # Check lint & format issues
+make test   # Run Python tests
+```
+
+**Windows:**
+```cmd
+.\dev check  # Check lint & format issues
+.\dev test   # Run Python tests
+```
+
+**Docker:**
+```bash
+make docker-check  # Check in Docker
+make docker-test   # Test in Docker
+```
+
+**Fix issues locally:**
+
+**Linux/Mac:**
+```bash
+make format  # Auto-fix lint & format Python code
+```
+
+**Windows:**
+```cmd
+.\dev format  # Auto-fix lint & format Python code
+```
+
+**Docker:**
+```bash
+make docker-format  # Format in Docker
+```
+
+### Ruff Commands (Direct)
+
+```bash
+# Check for issues (no changes)
+ruff check .
+ruff format --check .
+
+# Auto-fix issues
+ruff check . --fix
+ruff format .
+```
+
+### Tools Used
+
+**Python:**
+- **ruff** - Fast linter & formatter (replaces black, isort, flake8)
+- **pytest** - Testing framework
+
+### CI/CD
+
+On push to `main` or `develop`, GitHub Actions automatically:
+1. Checks code with Ruff (identifies errors, does NOT fix)
+2. Runs Python tests
+3. Fails if issues found (you must fix locally)
+
+See: `.github/workflows/ci.yml`
+
 ## Notes
 - **CORS/extension**: Backend allows `http://localhost:*` and `chrome-extension://*`. Ensure the backend is reachable at `http://localhost:5000` for the extension in `frontend/`.
 - **Profiles**: `vision-ai` is optional via the `vision` profile; include `--profile vision` when starting it.
-- **Caching**: Avoid touching `requirements.txt` unless needed; it invalidates Docker’s layer cache and slows builds.
+- **Caching**: Avoid touching `requirements.txt` unless needed; it invalidates Docker's layer cache and slows builds.
