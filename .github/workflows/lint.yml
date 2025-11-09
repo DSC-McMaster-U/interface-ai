@@ -1,0 +1,36 @@
+name: Lint
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  python-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Run Ruff on backend
+        run: ruff check .
+        working-directory: ./backend
+
+      - name: Run Ruff on playwright
+        run: ruff check .
+        working-directory: ./playwright
+
+      - name: Run Ruff on vision-ai
+        run: ruff check .
+        working-directory: ./vision-ai
