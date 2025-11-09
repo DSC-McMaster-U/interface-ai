@@ -1,4 +1,6 @@
-# InterfaceAI Dev Ops Cheatsheet
+# InterfaceAI DevOps Guide
+
+Quick reference for development, formatting, linting, testing, and Docker operations.
 
 ## Run a specific Docker container
 - **Start one service (build if needed)**
@@ -107,7 +109,64 @@ curl http://localhost:5000/health
 curl -X POST http://localhost:5000/api/relay -H "Content-Type: application/json" -d "{\"message\":\"world\"}"
 ```
 
+## Code Quality & Testing
+
+### Setup
+```bash
+# Install Python dev tools
+pip install -r dev-requirements.txt
+
+# Install JavaScript dev tools
+cd frontend && npm install
+```
+
+### Format, Lint, Test Commands
+
+**Linux/Mac:**
+```bash
+make format  # Format all code (Python & JavaScript)
+make lint    # Lint all code (Python & JavaScript)
+make test    # Run all tests (Python & JavaScript)
+```
+
+**Windows:**
+```cmd
+dev format  # Format all code
+dev lint    # Lint all code
+dev test    # Run all tests
+```
+
+**Docker (any OS):**
+```bash
+make docker-format  # Format in Docker
+make docker-lint    # Lint in Docker
+make docker-test    # Test in Docker
+```
+
+### Tools Used
+
+**Python:**
+- **black** - Code formatter
+- **isort** - Import sorter
+- **flake8** - Linter
+- **mypy** - Type checker
+- **pytest** - Testing
+
+**JavaScript:**
+- **prettier** - Code formatter
+- **eslint** - Linter
+- **jest** - Testing
+
+### CI/CD
+
+On push to `main` or `develop`, GitHub Actions automatically:
+1. Checks formatting (Python & JavaScript)
+2. Lints code (Python & JavaScript)
+3. Runs all tests (Python & JavaScript)
+
+See: `.github/workflows/ci.yml`
+
 ## Notes
 - **CORS/extension**: Backend allows `http://localhost:*` and `chrome-extension://*`. Ensure the backend is reachable at `http://localhost:5000` for the extension in `frontend/`.
 - **Profiles**: `vision-ai` is optional via the `vision` profile; include `--profile vision` when starting it.
-- **Caching**: Avoid touching `requirements.txt` unless needed; it invalidates Docker’s layer cache and slows builds.
+- **Caching**: Avoid touching `requirements.txt` unless needed; it invalidates Docker's layer cache and slows builds.

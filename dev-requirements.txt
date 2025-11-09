@@ -1,0 +1,8 @@
+# Dev dependencies - formatter, linter, tests
+black==24.3.0
+flake8==7.0.0
+mypy==1.9.0
+isort==5.13.2
+pytest==8.1.1
+pytest-cov==5.0.0
+types-requests==2.32.0.0
