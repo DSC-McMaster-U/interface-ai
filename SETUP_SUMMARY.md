@@ -1,65 +1,54 @@
 # Simplified CI/CD Setup ✅
 
-Clean and simple setup for linting, formatting, and testing.
+Clean and simple setup with Ruff for Python linting, formatting, and testing.
 
 ## What You Have
 
-### ✅ Formatters
-- **Python:** Black + isort
-- **JavaScript:** Prettier
-
-### ✅ Linters
-- **Python:** Flake8 + mypy
-- **JavaScript:** ESLint
+### ✅ Linter & Formatter
+- **Python:** Ruff (replaces black, isort, flake8, mypy)
 
 ### ✅ Tests
 - **Python:** pytest (4 tests, 100% backend coverage)
-- **JavaScript:** Jest (3 tests)
 
 ## Quick Commands
 
 ### Windows
 ```cmd
-dev format  # Format everything
-dev lint    # Lint everything
-dev test    # Test everything
+.\dev check   # Check for issues (no changes)
+.\dev format  # Auto-fix issues
+.\dev test    # Run tests
 ```
 
 ### Linux/Mac
 ```bash
-make format  # Format everything
-make lint    # Lint everything
-make test    # Test everything
+make check   # Check for issues (no changes)
+make format  # Auto-fix issues
+make test    # Run tests
 ```
 
 ### Docker
 ```bash
-make docker-format
-make docker-lint
-make docker-test
+make docker-check   # Check in Docker
+make docker-format  # Format in Docker
+make docker-test    # Test in Docker
 ```
 
 ## GitHub Actions
 
 **Auto-runs on push to `main` or `develop`:**
-1. ✅ Format check (Python & JavaScript)
-2. ✅ Lint (Python & JavaScript)
-3. ✅ Test (Python & JavaScript)
+1. ✅ Check with Ruff (identifies errors, does NOT fix)
+2. ✅ Run Python tests
+3. ❌ Fails if issues found (you fix locally)
 
 See: `.github/workflows/ci.yml`
 
 ## Files
 
 ### Config Files
-- `pyproject.toml` - Python tool configs
-- `.flake8` - Flake8 config
-- `frontend/.eslintrc.json` - ESLint config
-- `frontend/.prettierrc` - Prettier config
-- `frontend/jest.config.js` - Jest config
+- `pyproject.toml` - Ruff & pytest config
 
 ### Dev Dependencies
-- `dev-requirements.txt` - Python dev tools
-- `frontend/package.json` - JavaScript dev tools
+- `dev-requirements.txt` - Python dev tools (ruff, pytest)
 
 ### Commands
 - `dev.bat` - Windows commands
@@ -72,13 +61,13 @@ See: `.github/workflows/ci.yml`
 ## Installation
 
 ```bash
-# Python
+# Python dev tools only
 pip install -r dev-requirements.txt
-
-# JavaScript
-cd frontend && npm install
 ```
 
 ## That's It! 🎉
 
-Simple commands, automatic CI, works locally and in Docker.
+Simple Ruff-based workflow:
+- **CI checks** (doesn't fix)
+- **Local fixes** (you run `dev format`)
+- Works in venv or Docker

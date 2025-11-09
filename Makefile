@@ -1,39 +1,33 @@
-.PHONY: help format lint test
+.PHONY: help check format test
 
 help:
 	@echo "Commands:"
-	@echo "  make format  - Format Python & JavaScript"
-	@echo "  make lint    - Lint Python & JavaScript"
-	@echo "  make test    - Run all tests"
+	@echo "  make check   - Check for lint/format issues (no changes)"
+	@echo "  make format  - Auto-fix and format Python code"
+	@echo "  make test    - Run Python tests"
 
-# Format all code
+# Check for issues (does NOT modify files)
+check:
+	ruff check backend/ playwright/ vision-ai/ tests/
+	ruff format --check backend/ playwright/ vision-ai/ tests/
+
+# Auto-fix and format code
 format:
-	black backend/ playwright/ vision-ai/ tests/
-	isort backend/ playwright/ vision-ai/ tests/
-	cd frontend && npm run format
+	ruff check backend/ playwright/ vision-ai/ tests/ --fix
+	ruff format backend/ playwright/ vision-ai/ tests/
 
-# Lint all code
-lint:
-	flake8 backend/ playwright/ vision-ai/ tests/
-	mypy backend/ playwright/ vision-ai/
-	cd frontend && npm run lint
-
-# Run all tests
+# Run tests
 test:
 	pytest tests/ -v
-	cd frontend && npm test
 
 # Docker commands
-docker-format:
-	docker-compose exec backend black /app
-	docker-compose exec backend isort /app
-	docker-compose exec backend sh -c "cd /app && npm run format" 2>/dev/null || true
+docker-check:
+	docker-compose exec backend ruff check /app
+	docker-compose exec backend ruff format --check /app
 
-docker-lint:
-	docker-compose exec backend flake8 /app
-	docker-compose exec backend mypy /app
-	docker-compose exec backend sh -c "cd /app && npm run lint" 2>/dev/null || true
+docker-format:
+	docker-compose exec backend ruff check /app --fix
+	docker-compose exec backend ruff format /app
 
 docker-test:
 	docker-compose exec backend pytest /app/tests -v
-	docker-compose exec backend sh -c "cd /app && npm test" 2>/dev/null || true

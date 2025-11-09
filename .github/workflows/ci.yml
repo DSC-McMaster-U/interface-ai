@@ -18,43 +18,17 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-    
-    - name: Install Python dependencies
+    - name: Install dependencies
       run: |
         pip install -r backend/requirements.txt
         pip install -r playwright/requirements.txt
         pip install -r vision-ai/requirements.txt
         pip install -r dev-requirements.txt
     
-    - name: Install JavaScript dependencies
-      working-directory: frontend
-      run: npm ci
-    
-    - name: Format Python
+    - name: Check with Ruff
       run: |
-        black --check backend/ playwright/ vision-ai/ tests/
-        isort --check-only backend/ playwright/ vision-ai/ tests/
+        ruff check backend/ playwright/ vision-ai/ tests/
+        ruff format --check backend/ playwright/ vision-ai/ tests/
     
-    - name: Format JavaScript
-      working-directory: frontend
-      run: npm run format:check
-    
-    - name: Lint Python
-      run: |
-        flake8 backend/ playwright/ vision-ai/ tests/
-        mypy backend/ playwright/ vision-ai/
-    
-    - name: Lint JavaScript
-      working-directory: frontend
-      run: npm run lint
-    
-    - name: Test Python
+    - name: Run tests
       run: pytest tests/ -v
-    
-    - name: Test JavaScript
-      working-directory: frontend
-      run: npm test

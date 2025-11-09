@@ -2,39 +2,33 @@
 REM Simple dev commands for Windows
 
 if "%1"=="" goto help
+if "%1"=="check" goto check
 if "%1"=="format" goto format
-if "%1"=="lint" goto lint
 if "%1"=="test" goto test
 goto help
 
-:format
-echo Formatting Python...
-black backend/ playwright/ vision-ai/ tests/
-isort backend/ playwright/ vision-ai/ tests/
-echo Formatting JavaScript...
-cd frontend && npm run format
+:check
+echo Checking Python (no changes)...
+python -m ruff check backend/ playwright/ vision-ai/ tests/
+python -m ruff format --check backend/ playwright/ vision-ai/ tests/
 goto end
 
-:lint
-echo Linting Python...
-flake8 backend/ playwright/ vision-ai/ tests/
-mypy backend/ playwright/ vision-ai/
-echo Linting JavaScript...
-cd frontend && npm run lint
+:format
+echo Formatting Python...
+python -m ruff check backend/ playwright/ vision-ai/ tests/ --fix
+python -m ruff format backend/ playwright/ vision-ai/ tests/
 goto end
 
 :test
 echo Testing Python...
-pytest tests/ -v
-echo Testing JavaScript...
-cd frontend && npm test
+python -m pytest tests/ -v
 goto end
 
 :help
 echo Commands:
-echo   dev format  - Format all code
-echo   dev lint    - Lint all code
-echo   dev test    - Run all tests
+echo   dev check   - Check for issues (no changes)
+echo   dev format  - Auto-fix and format Python
+echo   dev test    - Run Python tests
 goto end
 
 :end

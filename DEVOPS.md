@@ -115,54 +115,71 @@ curl -X POST http://localhost:5000/api/relay -H "Content-Type: application/json"
 ```bash
 # Install Python dev tools
 pip install -r dev-requirements.txt
-
-# Install JavaScript dev tools
-cd frontend && npm install
 ```
 
-### Format, Lint, Test Commands
+### Commands
+
+**Check for issues (does NOT modify files):**
 
 **Linux/Mac:**
 ```bash
-make format  # Format all code (Python & JavaScript)
-make lint    # Lint all code (Python & JavaScript)
-make test    # Run all tests (Python & JavaScript)
+make check  # Check lint & format issues
+make test   # Run Python tests
 ```
 
 **Windows:**
 ```cmd
-dev format  # Format all code
-dev lint    # Lint all code
-dev test    # Run all tests
+.\dev check  # Check lint & format issues
+.\dev test   # Run Python tests
 ```
 
-**Docker (any OS):**
+**Docker:**
+```bash
+make docker-check  # Check in Docker
+make docker-test   # Test in Docker
+```
+
+**Fix issues locally:**
+
+**Linux/Mac:**
+```bash
+make format  # Auto-fix lint & format Python code
+```
+
+**Windows:**
+```cmd
+.\dev format  # Auto-fix lint & format Python code
+```
+
+**Docker:**
 ```bash
 make docker-format  # Format in Docker
-make docker-lint    # Lint in Docker
-make docker-test    # Test in Docker
+```
+
+### Ruff Commands (Direct)
+
+```bash
+# Check for issues (no changes)
+ruff check .
+ruff format --check .
+
+# Auto-fix issues
+ruff check . --fix
+ruff format .
 ```
 
 ### Tools Used
 
 **Python:**
-- **black** - Code formatter
-- **isort** - Import sorter
-- **flake8** - Linter
-- **mypy** - Type checker
-- **pytest** - Testing
-
-**JavaScript:**
-- **prettier** - Code formatter
-- **eslint** - Linter
-- **jest** - Testing
+- **ruff** - Fast linter & formatter (replaces black, isort, flake8)
+- **pytest** - Testing framework
 
 ### CI/CD
 
 On push to `main` or `develop`, GitHub Actions automatically:
-1. Checks formatting (Python & JavaScript)
-2. Lints code (Python & JavaScript)
-3. Runs all tests (Python & JavaScript)
+1. Checks code with Ruff (identifies errors, does NOT fix)
+2. Runs Python tests
+3. Fails if issues found (you must fix locally)
 
 See: `.github/workflows/ci.yml`
 
