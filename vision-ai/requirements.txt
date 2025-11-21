@@ -1,3 +1,4 @@
 # Python deps for the Vision-AI service
 # Note: defaultdict is from Python stdlib (collections), no install needed.
 flask==3.0.3
+pytest==8.3.4
