@@ -3,7 +3,10 @@ from flask_cors import CORS
 import os
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": ["http://localhost:*", "chrome-extension://*"]}})
+CORS(
+    app,
+    resources={r"/api/*": {"origins": ["http://localhost:*", "chrome-extension://*"]}},
+)
 
 
 @app.get("/health")

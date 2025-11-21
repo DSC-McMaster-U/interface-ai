@@ -8,7 +8,5 @@
     "default_title": "InterfaceAI"
   },
   "permissions": [],
-  "host_permissions": [
-    "http://localhost:5000/*"
-  ]
+  "host_permissions": ["http://localhost:5000/*"]
 }
