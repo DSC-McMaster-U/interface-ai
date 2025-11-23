@@ -24,7 +24,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          python documentation/meeting_scripts/summarize_meeting.py
+          python documentation/meeting-scripts/summarize_meeting.py
 
       - name: Commit summary
         run: |
