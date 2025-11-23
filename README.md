@@ -1,5 +1,13 @@
 <h1 align="center">🤖 InterfaceAI</h1>
 
+
+## Meeting Notes (in branch ACTIONS_MEETING_SUMMARY)
+AI Summarized Meeting Notes: View at [here](documentation/meetings/summaries/)
+
+RAW Meeting Notes: View at [here](documentation/meetings/raw-notes/)
+
+
+
 ## 🚀 Project Overview
 
 **InterfaceAI** is a Chrome extension that turns natural language into action.  
