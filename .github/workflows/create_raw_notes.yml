@@ -19,7 +19,7 @@ jobs:
 
       - name: Run script
         run: |
-          python documentation/meeting_scripts/create_raw_template.py
+          python documentation/meeting-scripts/create_raw_template.py
 
       - name: Commit changes
         run: |
