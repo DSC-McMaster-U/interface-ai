@@ -49,9 +49,13 @@ By combining intent recognition, vision-based action execution, and contextual a
 
 ## For More Information...
 
+### [Quick Start Guide](./documentation/OVERVIEW.md) - Get started in minutes
+
+### [DevOps Cheatsheet](./documentation/DEVOPS.md) - Docker and local development
+
+### [CI/CD Documentation](./documentation/CICD.md) - Tests, linters, and formatters
+
 ### [View the Project Roadmap](./PROJECT-ROADMAP.md)
-  
-### [View the DevOps Cheatsheet](./DEVOPS.md)
 
 ---
 
