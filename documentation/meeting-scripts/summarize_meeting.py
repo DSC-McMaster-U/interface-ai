@@ -5,7 +5,7 @@ import requests
 import json
 
 API_KEY = os.getenv("GEMINI_API_KEY")
-MODEL = "gemini-1.5-pro-latest"
+MODEL = "gemini-2.5-flash-lite"
 
 # Find the latest raw note file
 files = sorted(glob.glob("documentation/meetings/raw-notes/raw-*.md"))
