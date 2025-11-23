@@ -1,0 +1,30 @@
+name: Create Weekly Raw Notes
+
+on:
+  schedule:
+    - cron: "0 21 * * 5"  # Friday 4pm EST (21:00 UTC)
+  workflow_dispatch:
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Run script
+        run: |
+          python documentation/meeting_scripts/create_raw_template.py
+
+      - name: Commit changes
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          git add documentation/meetings/raw-notes/
+          git commit -m "Auto-create weekly raw notes"
+          git push
