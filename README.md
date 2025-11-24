@@ -2,7 +2,7 @@
 
 ## 🚀 Project Overview
 
-**InterfaceAI** is a Chrome extension that turns natural language into action.
+**InterfaceAI** is a Chrome extension that turns natural language into action.  
 Ask it to “set up an AWS instance,” “book a flight,” or “open my calculus lecture,” and it will understand your intent, navigate webpages, and execute tasks directly on your screen.
 
 By combining intent recognition, vision-based action execution, and contextual awareness, InterfaceAI goes beyond existing tools with autonomous webpage exploration and personalized digital profiles—building the next generation of AI agents that make technology work for you.
@@ -31,19 +31,19 @@ By combining intent recognition, vision-based action execution, and contextual a
 
 ## Contributor 👨‍💻
 
-|                                                                     Photo                                                                     | Contributor                                                                                 | Role & Tools                                     | Notable Contributions     |
-| :-------------------------------------------------------------------------------------------------------------------------------------------: | :------------------------------------------------------------------------------------------ | :----------------------------------------------- | :------------------------ |
-| `<img width="120" height="120" src="https://github.com/user-attachments/assets/f594f377-a326-49cd-9e18-c9caa5df4b59" alt="Sachin Gupta" />` | [**Sachin Gupta**](https://github.com/SachinVedGupta) `<i>`Project Lead `</i>`       | Python · PyTorch · GCP                         | Ideation                  |
-|                                                                                                                                              | [**Adrian Najmi**](https://github.com/adriancoder06) `<i>`AI `</i>`                  | Python · PyTorch · Playwright · Tesseract OCR | Ideation                  |
-|                                                                                                                                              | [**Hassan Ibrahim**](https://github.com/Hassan-Ibrahim-1) `<i>`Backend `</i>`        | Python · Flask                                  | Database Design           |
-|                                                                                                                                              | [**Luna Aljammal**](https://github.com/luna-aljammal) `<i>`Backend + DB `</i>`       | Python · Flask · Redis · GCP                  | Database Integration      |
-|                                                                                                                                              | [**Andrew Wu**](https://github.com/andrewwu13) `<i>`Frontend `</i>`                  | JavaScript                                       | UI & Frontend Development |
-|                                                                                                                                              | [**Mohit Gedela**](https://github.com/MohitGedela) `<i>`Vision AI `</i>`             | Python · Java · JavaScript                     | Vision AI Development     |
-|                                                                                                                                              | Alex Melnbardis `<i>`AI `<i>`                                                           | Python · PyTorch · Playwright · LangGraph     | AI Agents + Vision AI     |
-|                                                                                                                                              | [**David Olejniczak**](https://github.com/davidolejniczak) `<i>`CI/CD + Cloud `</i>` | CGP · Docker · Github Actions                  | CI/CD                     |
-|                                                                                                                                              |                                                                                             |                                                  |                           |
-|                                                                                                                                              |                                                                                             |                                                  |                           |
-|                                                                                                                                              |                                                                                             |                                                  |                           |
+| Photo | Contributor | Role & Tools | Notable Contributions |
+|:--:|:--|:--|:--|
+| <img width="120" height="120" src="https://github.com/user-attachments/assets/f594f377-a326-49cd-9e18-c9caa5df4b59" alt="Sachin Gupta" /> | [**Sachin Gupta**](https://github.com/SachinVedGupta) <br/><i>Project Lead</i> | Python · PyTorch · GCP | Ideation |
+|  | [**Adrian Najmi**](https://github.com/adriancoder06) <br/><i>AI</i> | Python · PyTorch · Playwright · Tesseract OCR | Ideation |
+|  | [**Hassan Ibrahim**](https://github.com/Hassan-Ibrahim-1) <br/><i>Backend</i> | Python · Flask | Database Design |
+|  | [**Luna Aljammal**](https://github.com/luna-aljammal) <br/><i>Backend + DB</i> | Python · Flask · Redis · GCP | Database Integration |
+|  | [**Andrew Wu**](https://github.com/andrewwu13) <br/><i>Frontend</i> | JavaScript | UI & Frontend Development |
+|  | [**Mohit Gedela**](https://github.com/MohitGedela) <br/><i>Vision AI</i> | Python · Java · JavaScript | Vision AI Development |
+|  | [**Alex Melnbardis**](https://github.com/amelnbardis2004) <br/><i>AI</i> | Python · PyTorch · Playwright · LangGraph | AI Agents + Vision AI |
+|  | [**David Olejniczak**](https://github.com/davidolejniczak) <br/><i>CI/CD + Cloud</i> | CGP · Docker · Github Actions | CI/CD |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
 
 ---
 
