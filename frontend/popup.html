@@ -30,9 +30,30 @@
   </head>
   <body>
     <h3>InterfaceAI</h3>
-    <input id="msg" type="text" placeholder="Type a message" />
-    <button id="send">Send to backend</button>
+    
+    <!-- Input field -->
+    <input id="msg" type="text" placeholder="Enter command..." style="margin-bottom: 12px;" />
+    
+    <!-- Action buttons -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+      <button id="clickBtn" style="background-color: #4CAF50;">Click Button</button>
+      <button id="fillBtn" style="background-color: #2196F3;">Fill Textbox</button>
+      <button id="searchBtn" style="background-color: #FF9800; grid-column: span 2;">Search Google</button>
+    </div>
+    
+    <!-- Instructions -->
+    <details style="margin-bottom: 12px; font-size: 11px; color: #666;">
+      <summary style="cursor: pointer;">How to use</summary>
+      <ul style="margin: 8px 0; padding-left: 20px;">
+        <li><strong>Click Button:</strong> Type button text (e.g., "Submit")</li>
+        <li><strong>Fill Textbox:</strong> Type "field_name|text" (e.g., "email|test@test.com")</li>
+        <li><strong>Search Google:</strong> Type search query, clicks first result</li>
+      </ul>
+    </details>
+    
+    <!-- Output -->
     <div id="out"></div>
+    
     <script src="popup.js"></script>
   </body>
 </html>

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InterfaceAI Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        button, input[type="submit"], input[type="button"] {
+            padding: 10px 20px;
+            margin: 10px 5px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: #4CAF50;
+            color: white;
+        }
+        button:hover, input[type="submit"]:hover, input[type="button"]:hover {
+            background-color: #45a049;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            display: none;
+        }
+        .result.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 InterfaceAI Test Page</h1>
+    <p>Use this page to test the InterfaceAI Chrome extension. Open the extension popup and try clicking buttons by typing their text.</p>
+
+    <div class="section">
+        <h2>Basic Buttons</h2>
+        <button onclick="showResult('result1', 'Submit button clicked!')">Submit</button>
+        <button onclick="showResult('result1', 'Login button clicked!')">Login</button>
+        <button onclick="showResult('result1', 'Next button clicked!')">Next</button>
+        <button onclick="showResult('result1', 'Cancel button clicked!')">Cancel</button>
+        <div id="result1" class="result"></div>
+    </div>
+
+    <div class="section">
+        <h2>Form with Submit</h2>
+        <form onsubmit="event.preventDefault(); showResult('result2', 'Form submitted!');">
+            <input type="text" placeholder="Enter your name" style="padding: 8px; margin-right: 10px;">
+            <input type="submit" value="Submit Form">
+        </form>
+        <div id="result2" class="result"></div>
+    </div>
+
+    <div class="section">
+        <h2>Input Buttons</h2>
+        <input type="button" value="Save" onclick="showResult('result3', 'Save button clicked!')">
+        <input type="button" value="Delete" onclick="showResult('result3', 'Delete button clicked!')">
+        <input type="button" value="Update" onclick="showResult('result3', 'Update button clicked!')">
+        <div id="result3" class="result"></div>
+    </div>
+
+    <div class="section">
+        <h2>Link Buttons (role="button")</h2>
+        <a href="#" role="button" onclick="event.preventDefault(); showResult('result4', 'Download link clicked!');" style="text-decoration: none; display: inline-block; padding: 10px 20px; background-color: #2196F3; color: white; border-radius: 4px; margin: 5px;">Download</a>
+        <a href="#" role="button" onclick="event.preventDefault(); showResult('result4', 'Upload link clicked!');" style="text-decoration: none; display: inline-block; padding: 10px 20px; background-color: #2196F3; color: white; border-radius: 4px; margin: 5px;">Upload</a>
+        <div id="result4" class="result"></div>
+    </div>
+
+    <div class="section">
+        <h2>Case Insensitive Test</h2>
+        <p>Try typing: "continue", "CONTINUE", or "Continue" - all should work!</p>
+        <button onclick="showResult('result5', 'Continue button clicked!')">Continue</button>
+        <div id="result5" class="result"></div>
+    </div>
+
+    <div class="section">
+        <h2>Partial Match Test</h2>
+        <p>Try typing just "Confirm" - it should match this button:</p>
+        <button onclick="showResult('result6', 'Confirm Order button clicked!')">Confirm Order</button>
+        <div id="result6" class="result"></div>
+    </div>
+
+    <div class="section" style="background-color: #fff9e6; border-color: #ffd700;">
+        <h2>📝 Testing Instructions</h2>
+        <ol>
+            <li>Make sure the Flask backend is running on <code>http://localhost:5000</code></li>
+            <li>Load the InterfaceAI extension in Chrome</li>
+            <li>Click the extension icon in your toolbar</li>
+            <li>Type a button name (e.g., "Submit", "Login", "Next")</li>
+            <li>Click "Click Button" in the popup</li>
+            <li>Watch the button on this page get clicked! ✨</li>
+        </ol>
+    </div>
+
+    <script>
+        function showResult(resultId, message) {
+            const resultDiv = document.getElementById(resultId);
+            resultDiv.textContent = `✅ ${message}`;
+            resultDiv.className = 'result show';
+            resultDiv.style.backgroundColor = '#d4edda';
+            resultDiv.style.color = '#155724';
+            
+            // Hide after 3 seconds
+            setTimeout(() => {
+                resultDiv.className = 'result';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
