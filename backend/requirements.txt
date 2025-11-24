@@ -1,6 +1,15 @@
+Flask
+
 flask==3.0.3
 flask-cors==4.0.1
 redis==5.0.8
 psycopg2-binary==2.9.9
 ruff
+<<<<<<< Updated upstream
 pytest==8.3.4
+=======
+openai>=1.0.0
+anthropic>=0.18.0
+google-generativeai>=0.8.0
+flask
+>>>>>>> Stashed changes

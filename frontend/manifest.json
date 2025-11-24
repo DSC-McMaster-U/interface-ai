@@ -7,6 +7,24 @@
     "default_popup": "popup.html",
     "default_title": "InterfaceAI"
   },
-  "permissions": [],
-  "host_permissions": ["http://localhost:5000/*"]
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://localhost:5001/*",
+    "http://*/*",
+    "https://*/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js", "autonomous_executor.js"],
+      "run_at": "document_idle"
+    }
+  ]
 }
