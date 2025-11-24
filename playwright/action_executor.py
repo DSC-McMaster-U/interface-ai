@@ -10,9 +10,6 @@ Integrates with Google Search capabilities - after initial search, this script
 takes over to perform actions on the page.
 
 Motivation: To do basic clicks in the UI
-
-Author: Adrian Najmi
-Date: 2025/11/23
 """
 
 from playwright.sync_api import sync_playwright, Page, Browser
