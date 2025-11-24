@@ -17,6 +17,6 @@
       "run_at": "document_idle"
     }
   ],
-  "permissions": ["activeTab", "scripting", "tabs"],
+  "permissions": ["activeTab", "scripting", "tabs", "storage"],
   "host_permissions": ["<all_urls>", "http://localhost:5000/*"]
 }

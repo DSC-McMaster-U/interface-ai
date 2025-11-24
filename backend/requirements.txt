@@ -1,5 +1,6 @@
 flask==3.0.3
 flask-cors==4.0.1
+google-generativeai>=0.3.0
 redis==5.0.8
 psycopg2-binary==2.9.9
 ruff

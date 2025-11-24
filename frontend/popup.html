@@ -26,9 +26,21 @@
         border-radius: 6px;
         min-height: 24px;
       }
+      .info-banner {
+        background: #E3F2FD;
+        padding: 8px;
+        border-radius: 4px;
+        margin-bottom: 10px;
+        font-size: 11px;
+        color: #1976D2;
+        border: 1px solid #90CAF9;
+      }
     </style>
   </head>
   <body>
+    <div class="info-banner">
+      💡 <strong>Auto-save enabled:</strong> Your steps are saved automatically! If the popup closes, just reopen it and your progress will be restored. You can also pin the popup using the <strong>📌 icon</strong> at top-right.
+    </div>
     <h3>InterfaceAI</h3>
     
     <!-- Input field -->
@@ -39,6 +51,7 @@
       <button id="clickBtn" style="background-color: #4CAF50;">Click Button</button>
       <button id="fillBtn" style="background-color: #2196F3;">Fill Textbox</button>
       <button id="searchBtn" style="background-color: #FF9800; grid-column: span 2;">Search Google</button>
+      <button id="fullAutoBtn" style="background-color: #9C27B0; grid-column: span 2; font-weight: bold;">🤖 Full Auto (AI)</button>
     </div>
     
     <!-- Instructions -->
@@ -48,8 +61,23 @@
         <li><strong>Click Button:</strong> Type button text (e.g., "Submit")</li>
         <li><strong>Fill Textbox:</strong> Type "field_name|text" (e.g., "email|test@test.com")</li>
         <li><strong>Search Google:</strong> Type search query, clicks first result</li>
+        <li><strong>Full Auto (AI):</strong> Type complex task (e.g., "post on Instagram"), AI generates steps</li>
       </ul>
     </details>
+    
+    <!-- Generated Steps Section (hidden by default) -->
+    <div id="stepsSection" style="display: none; margin-bottom: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 4px; flex-wrap: wrap;">
+        <h4 style="margin: 0; font-size: 14px;">Generated Steps:</h4>
+        <div style="display: flex; gap: 4px;">
+          <button id="clearStepsBtn" style="padding: 4px 8px; font-size: 11px; background-color: #f44336;">🗑️ Clear</button>
+          <button id="resetStepsBtn" style="padding: 4px 8px; font-size: 11px; background-color: #757575;">🔄 Reset</button>
+          <button id="nextStepBtn" style="padding: 4px 12px; font-size: 12px; background-color: #FF9800;">➡️ Next</button>
+          <button id="executeStepsBtn" style="padding: 4px 12px; font-size: 12px; background-color: #4CAF50;">▶ Execute All</button>
+        </div>
+      </div>
+      <div id="stepsList" style="background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; padding: 8px; max-height: 200px; overflow-y: auto;"></div>
+    </div>
     
     <!-- Output -->
     <div id="out"></div>
