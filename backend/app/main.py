@@ -343,6 +343,297 @@ Now generate steps for: "{task}"
         }), 500
 
 
+@app.route("/api/generate-replacement-step", methods=["POST"])
+def generate_replacement_step():
+    """
+    Endpoint to generate a replacement step when original fails
+    Uses page context (available buttons/fields) to generate better step
+    """
+    data = request.get_json(silent=True) or {}
+    goal = data.get("goal", "").strip()
+    tried_alternatives = data.get("triedAlternatives", [])
+    page_elements = data.get("pageElements", {})
+    
+    if not goal:
+        return jsonify({
+            "success": False,
+            "message": "No goal provided"
+        }), 400
+    
+    print(f"\n[Backend] 🔄 Generating replacement step for goal: '{goal}'")
+    print(f"[Backend] Tried alternatives: {tried_alternatives}")
+    print(f"[Backend] Available buttons: {page_elements.get('buttons', [])[:5]}")
+    print(f"[Backend] Available links: {page_elements.get('links', [])[:5]}")
+    print(f"[Backend] Available textboxes: {page_elements.get('textboxes', [])[:5]}")
+    
+    try:
+        import google.generativeai as genai
+        
+        # Configure Gemini
+        GEMINI_API_KEY = "AIzaSyAcBF9LfX5Pa-zXdqYt7SBIJkemj4bTTuo"
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        # Create prompt with page context
+        buttons_list = ", ".join([f'"{b}"' for b in page_elements.get("buttons", [])[:15]])
+        textboxes_list = ", ".join([f'"{t}"' for t in page_elements.get("textboxes", [])[:15]])
+        links_list = ", ".join([f'"{l}"' for l in page_elements.get("links", [])[:15]])
+        
+        # Combine buttons and links as clickable elements
+        clickable_elements = list(page_elements.get("buttons", [])[:15]) + list(page_elements.get("links", [])[:15])
+        clickable_list = ", ".join([f'"{c}"' for c in clickable_elements[:20]])
+        
+        tried_str = "\n".join([f"  - {alt[0]}: {alt[1]}" for alt in tried_alternatives])
+        
+        prompt = f"""A web automation step failed. Generate a NEW replacement step with 2-3 alternatives based on what's ACTUALLY available on the page.
+
+**Original Goal:** {goal}
+
+**What Was Tried (ALL FAILED):**
+{tried_str}
+
+**Available Elements on Current Page:**
+- Clickable elements (buttons + links): {clickable_list}
+- Text input fields: {textboxes_list}
+
+**Available Actions:**
+- "click" - Click button/link/anchor (param: element text)
+  NOTE: Links (<a> tags) are clickable just like buttons!
+- "fill" - Fill textbox (param: "fieldname|value")
+- "search" - Google search (param: search query)
+
+Generate a SINGLE replacement step as a 2D array with 2-3 alternatives that use ONLY elements from the available list above.
+DO NOT repeat the failed alternatives. Try different element names from the clickable elements or text fields list.
+
+Format: [["action", "param"], ["action", "param"], ["action", "param"]]
+
+Example if goal is "create post" and clickable elements include ["New", "Post", "Share", "Create link"]:
+[["click", "New"], ["click", "Create link"], ["click", "Post"]]
+
+IMPORTANT:
+- Return ONLY the JSON array, no other text
+- Use ONLY elements from the available lists above
+- Links can be clicked just like buttons
+- 2-3 alternatives maximum
+- Don't repeat what already failed
+
+Generate replacement step:
+"""
+        
+        print("[Backend] 📤 Sending request to Gemini...")
+        response = model.generate_content(prompt)
+        response_text = response.text.strip()
+        print(f"[Backend] 📥 Gemini response: {response_text[:200]}...")
+        
+        # Remove markdown code blocks if present
+        markdown_match = re.search(r'```(?:json)?\s*(.*?)\s*```', response_text, re.DOTALL)
+        if markdown_match:
+            response_text = markdown_match.group(1).strip()
+            print(f"[Backend] 📋 Extracted from markdown: {response_text[:100]}...")
+        
+        # Extract JSON array
+        start_match = re.search(r'\[\s*\[', response_text)
+        if start_match:
+            start_pos = start_match.start()
+            end_match = re.search(r'\]\s*\](?:\s*)$', response_text)
+            if end_match:
+                end_pos = end_match.end()
+                json_text = response_text[start_pos:end_pos]
+            else:
+                last_double_bracket = response_text.rfind(']]')
+                if last_double_bracket != -1:
+                    json_text = response_text[start_pos:last_double_bracket + 2]
+                else:
+                    json_text = response_text[start_pos:]
+            
+            print(f"[Backend] 🔍 Parsing JSON: {json_text[:150]}...")
+            replacement_step = json.loads(json_text)
+        else:
+            replacement_step = json.loads(response_text)
+        
+        print(f"[Backend] ✅ Generated replacement step: {replacement_step}")
+        
+        return jsonify({
+            "success": True,
+            "step": replacement_step,
+            "goal": goal
+        }), 200
+        
+    except ImportError:
+        print("[Backend] ❌ Error: google-generativeai not installed")
+        return jsonify({
+            "success": False,
+            "message": "Gemini AI library not installed"
+        }), 500
+    except json.JSONDecodeError as e:
+        print(f"[Backend] ❌ JSON parsing error: {e}")
+        print(f"[Backend] Response was: {response_text}")
+        return jsonify({
+            "success": False,
+            "message": f"Failed to parse AI response: {str(e)}"
+        }), 500
+    except Exception as e:
+        print(f"[Backend] ❌ Error generating replacement step: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "message": f"Error: {str(e)}"
+        }), 500
+
+
+@app.route("/api/verify-goal", methods=["POST"])
+def verify_goal():
+    """
+    Endpoint to verify if the original goal has been achieved
+    If not, generates continuation steps to complete the goal
+    """
+    data = request.get_json(silent=True) or {}
+    original_goal = data.get("originalGoal", "").strip()
+    page_content = data.get("pageContent", {})
+    completed_steps = data.get("completedSteps", [])
+    
+    if not original_goal:
+        return jsonify({
+            "success": False,
+            "message": "No original goal provided"
+        }), 400
+    
+    print(f"\n[Backend] 🎯 Verifying goal completion: '{original_goal}'")
+    print(f"[Backend] Page title: {page_content.get('title', 'N/A')}")
+    print(f"[Backend] Page URL: {page_content.get('url', 'N/A')}")
+    print(f"[Backend] Completed {len(completed_steps)} steps")
+    print(f"[Backend] Available buttons: {page_content.get('buttons', [])[:5]}")
+    print(f"[Backend] Available links: {page_content.get('links', [])[:5]}")
+    
+    try:
+        import google.generativeai as genai
+        
+        # Configure Gemini
+        GEMINI_API_KEY = "AIzaSyAcBF9LfX5Pa-zXdqYt7SBIJkemj4bTTuo"
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        # Prepare page content summary
+        headings = ", ".join([f'"{h}"' for h in page_content.get("headings", [])[:10]])
+        visible_text = "\n  - ".join(page_content.get("visibleText", [])[:20])
+        buttons = ", ".join([f'"{b}"' for b in page_content.get("buttons", [])[:15]])
+        links = ", ".join([f'"{l}"' for l in page_content.get("links", [])[:15]])
+        textboxes = ", ".join([f'"{t}"' for t in page_content.get("textboxes", [])[:15]])
+        
+        # Combine buttons and links as clickable elements
+        clickable_elements = list(page_content.get("buttons", [])[:15]) + list(page_content.get("links", [])[:15])
+        clickable_list = ", ".join([f'"{c}"' for c in clickable_elements[:25]])
+        
+        # Format completed steps
+        steps_summary = "\n".join([
+            f"  {i+1}. {step[0]}: {step[1]}" 
+            for i, step in enumerate(completed_steps[:10])
+        ])
+        
+        prompt = f"""You are evaluating whether a web automation goal has been achieved.
+
+**Original Goal:** {original_goal}
+
+**Steps Completed:**
+{steps_summary}
+
+**Current Page State:**
+- Title: {page_content.get('title', 'Unknown')}
+- URL: {page_content.get('url', 'Unknown')}
+- Headings: {headings}
+- Visible Text (sample):
+  - {visible_text}
+- Clickable elements (buttons + links): {clickable_list}
+- Text input fields: {textboxes}
+
+**Your Task:**
+1. Analyze if the original goal "{original_goal}" has been ACHIEVED based on the page content
+2. Look for success indicators: confirmation messages, completion text, redirects to success pages
+3. If ACHIEVED: Return {{"achieved": true, "steps": []}}
+4. If NOT ACHIEVED: Generate 2-5 additional steps to complete the goal
+
+**Available Actions:**
+- "click" - Click button/link/anchor (param: element text)
+  NOTE: Links (<a> tags) can be clicked just like buttons!
+- "fill" - Fill textbox (param: "fieldname|value")
+- "search" - Google search (param: search query)
+
+**Response Format (JSON only):**
+{{
+  "achieved": true/false,
+  "reason": "Brief explanation of why achieved or not",
+  "steps": [
+    [["action", "param"], ["action", "param"]],
+    [["action", "param"]]
+  ]
+}}
+
+**Important:**
+- Return ONLY valid JSON, no other text
+- If achieved, steps array should be empty []
+- If not achieved, generate 2-5 continuation steps as 3D array (with fallback alternatives)
+- Use ONLY elements from the clickable elements and text fields lists above
+- Links (<a> tags) are clickable - treat them like buttons
+- Be realistic about what's possible based on page content
+
+Evaluate now:
+"""
+        
+        print("[Backend] 📤 Sending verification request to Gemini...")
+        response = model.generate_content(prompt)
+        response_text = response.text.strip()
+        print(f"[Backend] 📥 Gemini response: {response_text[:300]}...")
+        
+        # Remove markdown code blocks if present
+        markdown_match = re.search(r'```(?:json)?\s*(.*?)\s*```', response_text, re.DOTALL)
+        if markdown_match:
+            response_text = markdown_match.group(1).strip()
+            print(f"[Backend] 📋 Extracted from markdown")
+        
+        # Parse JSON response
+        result = json.loads(response_text)
+        
+        achieved = result.get("achieved", False)
+        reason = result.get("reason", "")
+        continuation_steps = result.get("steps", [])
+        
+        print(f"[Backend] Goal achieved: {achieved}")
+        print(f"[Backend] Reason: {reason}")
+        if not achieved:
+            print(f"[Backend] Generated {len(continuation_steps)} continuation steps")
+        
+        return jsonify({
+            "success": True,
+            "achieved": achieved,
+            "reason": reason,
+            "steps": continuation_steps,
+            "originalGoal": original_goal
+        }), 200
+        
+    except ImportError:
+        print("[Backend] ❌ Error: google-generativeai not installed")
+        return jsonify({
+            "success": False,
+            "message": "Gemini AI library not installed"
+        }), 500
+    except json.JSONDecodeError as e:
+        print(f"[Backend] ❌ JSON parsing error: {e}")
+        print(f"[Backend] Response was: {response_text}")
+        return jsonify({
+            "success": False,
+            "message": f"Failed to parse AI response: {str(e)}"
+        }), 500
+    except Exception as e:
+        print(f"[Backend] ❌ Error verifying goal: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "message": f"Error: {str(e)}"
+        }), 500
+
+
 if __name__ == "__main__":
     # Run in single-threaded mode so Playwright browser can be reused across requests
     # threaded=False ensures all requests are handled in the same thread

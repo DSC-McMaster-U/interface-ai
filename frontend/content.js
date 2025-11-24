@@ -5,7 +5,23 @@
 
 // Listen for messages from the popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log("[InterfaceAI] Received action:", request.action);
+  console.log("[Content Script] Received message:", request.action);
+
+  if (request.action === "scrapeElements") {
+    console.log("[Content Script] Scraping page elements...");
+    const elements = scrapePageElements();
+    console.log("[Content Script] Found elements:", elements);
+    sendResponse({ success: true, elements });
+    return true;
+  }
+
+  if (request.action === "scrapeFullPage") {
+    console.log("[Content Script] Scraping full page content...");
+    const content = scrapeFullPageContent();
+    console.log("[Content Script] Scraped content:", content);
+    sendResponse({ success: true, content });
+    return true;
+  }
 
   if (request.action === "clickButton") {
     const buttonText = request.buttonText;
@@ -29,13 +45,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 /**
- * Click a button based on its text content
+ * Click a button or link based on its text content
+ * Supports buttons, links (<a> tags), and other clickable elements
  * Implements similar logic to action_executor.py's click_button_by_text
  */
 function clickButtonByText(buttonText) {
-  // Try multiple selectors to find the button
+  // Try multiple selectors to find clickable elements
   const selectors = [
-    // Standard button elements
+    // Buttons, links, and clickable elements
     `button:contains("${buttonText}")`,
     `input[type="submit"][value*="${buttonText}" i]`,
     `input[type="button"][value*="${buttonText}" i]`,
@@ -43,6 +60,7 @@ function clickButtonByText(buttonText) {
     `[role="button"]:contains("${buttonText}")`,
     // Also check aria-label
     `button[aria-label*="${buttonText}" i]`,
+    `a[aria-label*="${buttonText}" i]`,
     `[role="button"][aria-label*="${buttonText}" i]`,
   ];
 
@@ -62,16 +80,16 @@ function clickButtonByText(buttonText) {
     return null;
   }
 
-  // Try to find the button
-  let buttonElement = null;
+  // Try to find the clickable element (button or link)
+  let clickableElement = null;
   const lowerText = buttonText.toLowerCase();
 
-  // Try direct querySelector first
-  const allButtons = document.querySelectorAll(
-    'button, input[type="submit"], input[type="button"], a[role="button"], [role="button"]'
+  // Try direct querySelector - includes all <a> tags (links are clickable!)
+  const allClickables = document.querySelectorAll(
+    'button, input[type="submit"], input[type="button"], a, [role="button"], [onclick]'
   );
 
-  for (let elem of allButtons) {
+  for (let elem of allClickables) {
     const elemText =
       elem.textContent || elem.value || elem.getAttribute("aria-label") || "";
 
@@ -85,46 +103,47 @@ function clickButtonByText(buttonText) {
         window.getComputedStyle(elem).visibility !== "hidden";
 
       if (isVisible) {
-        buttonElement = elem;
+        clickableElement = elem;
         break;
       }
     }
   }
 
-  if (buttonElement) {
+  if (clickableElement) {
     try {
       // Scroll into view
-      buttonElement.scrollIntoView({ behavior: "smooth", block: "center" });
+      clickableElement.scrollIntoView({ behavior: "smooth", block: "center" });
 
-      // Highlight the button briefly
-      const originalBorder = buttonElement.style.border;
-      buttonElement.style.border = "3px solid #4CAF50";
+      // Highlight the element briefly
+      const originalBorder = clickableElement.style.border;
+      clickableElement.style.border = "3px solid #4CAF50";
       setTimeout(() => {
-        buttonElement.style.border = originalBorder;
+        clickableElement.style.border = originalBorder;
       }, 1000);
 
-      // Click the button
-      buttonElement.click();
+      // Click the element (button or link)
+      clickableElement.click();
 
-      console.log(`[InterfaceAI] Successfully clicked button: "${buttonText}"`);
+      const elementType = clickableElement.tagName.toLowerCase() === 'a' ? 'link' : 'button';
+      console.log(`[InterfaceAI] Successfully clicked ${elementType}: "${buttonText}"`);
       return {
         success: true,
-        message: `Clicked button: "${buttonText}"`,
-        elementTag: buttonElement.tagName,
-        elementText: buttonElement.textContent || buttonElement.value,
+        message: `Clicked ${elementType}: "${buttonText}"`,
+        elementTag: clickableElement.tagName,
+        elementText: clickableElement.textContent || clickableElement.value,
       };
     } catch (error) {
-      console.error("[InterfaceAI] Error clicking button:", error);
+      console.error("[InterfaceAI] Error clicking element:", error);
       return {
         success: false,
-        message: `Error clicking button: ${error.message}`,
+        message: `Error clicking element: ${error.message}`,
       };
     }
   } else {
-    console.warn(`[InterfaceAI] Button not found: "${buttonText}"`);
+    console.warn(`[InterfaceAI] Clickable element not found: "${buttonText}"`);
     return {
       success: false,
-      message: `Button with text "${buttonText}" not found on page`,
+      message: `Clickable element with text "${buttonText}" not found on page`,
     };
   }
 }
@@ -302,6 +321,113 @@ function clickFirstGoogleResult() {
     success: false,
     message: "Could not find first search result",
   };
+}
+
+console.log("[InterfaceAI] Content script loaded");
+
+// Scrape page for available interactive elements
+function scrapePageElements() {
+  const elements = {
+    buttons: [],
+    textboxes: [],
+    links: [],
+  };
+
+  // Get all clickable elements (buttons, links, clickable divs)
+  const clickables = document.querySelectorAll(
+    'button, input[type="button"], input[type="submit"], a, [role="button"], [onclick]'
+  );
+  clickables.forEach((el) => {
+    const text = el.textContent?.trim() || el.value || el.getAttribute("aria-label") || "";
+    const tag = el.tagName.toLowerCase();
+    const type = el.getAttribute("type") || "";
+    
+    if (text && text.length < 100) {
+      if (tag === "a") {
+        elements.links.push(text);
+      } else {
+        elements.buttons.push(text);
+      }
+    }
+  });
+
+  // Get all input fields
+  const inputs = document.querySelectorAll(
+    'input[type="text"], input[type="email"], input[type="password"], input[type="search"], textarea, input:not([type])'
+  );
+  inputs.forEach((el) => {
+    const name = el.name || el.id || el.placeholder || el.getAttribute("aria-label") || "";
+    if (name && name.length < 100) {
+      elements.textboxes.push(name);
+    }
+  });
+
+  // Limit to top 20 of each to avoid huge payloads
+  return {
+    buttons: [...new Set(elements.buttons)].slice(0, 20),
+    textboxes: [...new Set(elements.textboxes)].slice(0, 20),
+    links: [...new Set(elements.links)].slice(0, 20),
+  };
+}
+
+// Scrape full page content for goal verification
+function scrapeFullPageContent() {
+  const content = {
+    title: document.title,
+    url: window.location.href,
+    headings: [],
+    visibleText: [],
+    buttons: [],
+    textboxes: [],
+    links: [],
+    images: [],
+  };
+
+  // Get headings
+  const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
+  headings.forEach((h) => {
+    const text = h.textContent?.trim();
+    if (text && text.length < 200) {
+      content.headings.push(text);
+    }
+  });
+
+  // Get visible text from main content areas
+  const textElements = document.querySelectorAll('p, span, div, li, td');
+  const seenText = new Set();
+  textElements.forEach((el) => {
+    // Only get text from visible elements
+    if (el.offsetParent !== null) {
+      const text = el.textContent?.trim();
+      if (text && text.length > 10 && text.length < 300 && !seenText.has(text)) {
+        seenText.add(text);
+        content.visibleText.push(text);
+      }
+    }
+  });
+
+  // Get interactive elements (reuse from scrapePageElements)
+  const elements = scrapePageElements();
+  content.buttons = elements.buttons;
+  content.textboxes = elements.textboxes;
+  content.links = elements.links;
+
+  // Get visible images with alt text
+  const images = document.querySelectorAll('img');
+  images.forEach((img) => {
+    const alt = img.alt || img.title;
+    if (alt && alt.length < 100) {
+      content.images.push(alt);
+    }
+  });
+
+  // Limit text to top 30 items to avoid massive payloads
+  content.headings = [...new Set(content.headings)].slice(0, 10);
+  content.visibleText = [...new Set(content.visibleText)].slice(0, 30);
+  content.images = [...new Set(content.images)].slice(0, 10);
+
+  console.log("[Content Script] Scraped full page content:", content);
+  return content;
 }
 
 console.log("[InterfaceAI] Content script loaded");

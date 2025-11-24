@@ -132,6 +132,7 @@ async function searchGoogle() {
 let generatedSteps = [];
 let currentStepIndex = 0;
 let currentAlternativeIndex = 0;
+let originalGoal = ""; // Store the original task for verification
 
 // Load saved state when popup opens
 async function loadState() {
@@ -140,12 +141,14 @@ async function loadState() {
       "generatedSteps",
       "currentStepIndex",
       "currentAlternativeIndex",
+      "originalGoal",
     ]);
 
     if (result.generatedSteps && result.generatedSteps.length > 0) {
       generatedSteps = result.generatedSteps;
       currentStepIndex = result.currentStepIndex || 0;
       currentAlternativeIndex = result.currentAlternativeIndex || 0;
+      originalGoal = result.originalGoal || "";
       displaySteps(generatedSteps);
       document.getElementById("out").textContent =
         "✅ Restored previous session. Click Next to continue or Reset to start over.";
@@ -164,6 +167,7 @@ async function saveState() {
       generatedSteps: generatedSteps,
       currentStepIndex: currentStepIndex,
       currentAlternativeIndex: currentAlternativeIndex,
+      originalGoal: originalGoal,
     });
   } catch (e) {
     console.error("[Popup] Error saving state:", e);
@@ -195,9 +199,8 @@ async function fullAuto() {
     return;
   }
 
-  out.textContent = "🤖 AI is generating steps...";
+  out.textContent = "Generating automation steps...";
   out.style.color = "#9C27B0";
-  console.log(`[Popup] Generating steps for: "${task}"`);
 
   try {
     const response = await fetch("http://localhost:5000/api/generate-steps", {
@@ -213,6 +216,7 @@ async function fullAuto() {
       generatedSteps = data.steps;
       currentStepIndex = 0;
       currentAlternativeIndex = 0;
+      originalGoal = task; // Save original goal for verification
       await saveState(); // Save to storage
       displaySteps(generatedSteps);
       out.textContent = `✅ Generated ${generatedSteps.length} steps. Click Next or Execute All!`;
@@ -238,15 +242,35 @@ function displaySteps(steps) {
 
   steps.forEach((step, index) => {
     const stepDiv = document.createElement("div");
+    
+    // Check step type
+    const isReplacement = step.isReplacement || false;
+    const isContinuation = step.isContinuation || false;
+    
+    let borderColor = "#ddd";
+    let bgColor = "white";
+    let stepLabel = `<span style="font-weight: bold; color: #666;">Step ${index + 1}</span>`;
+    
+    if (isReplacement) {
+      borderColor = "#9C27B0";
+      bgColor = "#f3e5f5";
+      stepLabel = `<span style="font-weight: bold; color: #9C27B0;">Step ${index + 1} 🤖 (AI Fix)</span>`;
+    } else if (isContinuation) {
+      borderColor = "#2196F3";
+      bgColor = "#e3f2fd";
+      stepLabel = `<span style="font-weight: bold; color: #2196F3;">Step ${index + 1} ➕ (Continue)</span>`;
+    }
+    
     stepDiv.style.cssText =
-      "margin-bottom: 8px; padding: 8px; background: white; border-radius: 4px; border: 1px solid #ddd;";
+      `margin-bottom: 8px; padding: 8px; background: ${bgColor}; border-radius: 4px; border: 1px solid ${borderColor};`;
 
     // Step header
     const stepHeader = document.createElement("div");
     stepHeader.style.cssText =
       "display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;";
+    
     stepHeader.innerHTML = `
-      <span style="font-weight: bold; color: #666;">Step ${index + 1}</span>
+      ${stepLabel}
       <button class="deleteStepBtn" data-index="${index}" style="padding: 2px 8px; font-size: 10px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer;">Delete</button>
     `;
 
@@ -351,6 +375,126 @@ async function resetSteps() {
   console.log("[Popup] Reset execution to beginning");
 }
 
+// Verify if the original goal has been achieved
+async function verifyGoalCompletion() {
+  const out = document.getElementById("out");
+  
+  if (!originalGoal) {
+    out.textContent = "✅ All steps completed!";
+    out.style.color = "#4CAF50";
+    currentStepIndex = 0;
+    currentAlternativeIndex = 0;
+    await saveState();
+    displaySteps(generatedSteps);
+    return;
+  }
+  
+  out.textContent = "🔍 Analyzing page to verify goal completion...";
+  out.style.color = "#9C27B0";
+  
+  try {
+    // Scrape full page content
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tabs || tabs.length === 0) {
+      out.textContent = "Error: No active tab";
+      out.style.color = "#f44336";
+      return;
+    }
+    
+    const scrapeResult = await new Promise((resolve) => {
+      chrome.tabs.sendMessage(
+        tabs[0].id,
+        { action: "scrapeFullPage" },
+        (response) => {
+          resolve(response || { success: false });
+        }
+      );
+    });
+    
+    if (!scrapeResult.success) {
+      out.textContent = "❌ Failed to scrape page content";
+      out.style.color = "#f44336";
+      return;
+    }
+    
+    console.log("[Popup] Scraped page content:", scrapeResult.content);
+    
+    // Collect completed steps (all successful alternatives)
+    const completedSteps = [];
+    for (let i = 0; i < generatedSteps.length; i++) {
+      // Just use the first alternative of each step as the "completed" action
+      if (generatedSteps[i] && generatedSteps[i][0]) {
+        completedSteps.push(generatedSteps[i][0]);
+      }
+    }
+    
+    // Call backend to verify goal
+    out.textContent = "🤖 AI is evaluating if goal was achieved...";
+    const response = await fetch("http://localhost:5000/api/verify-goal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        originalGoal: originalGoal,
+        pageContent: scrapeResult.content,
+        completedSteps: completedSteps,
+      }),
+    });
+    
+    const data = await response.json();
+    console.log("[Popup] Goal verification result:", data);
+    
+    if (data.success) {
+      if (data.achieved) {
+        // Goal achieved!
+        out.textContent = `🎉 SUCCESS! Goal achieved: "${originalGoal}"\n\n${data.reason}`;
+        out.style.color = "#4CAF50";
+        
+        // Reset for next task
+        currentStepIndex = 0;
+        currentAlternativeIndex = 0;
+        await saveState();
+        displaySteps(generatedSteps);
+        
+        console.log("[Popup] 🎉 Goal achieved!");
+      } else {
+        // Goal NOT achieved - add continuation steps
+        out.textContent = `⚠️ Goal not fully achieved. ${data.reason}\n\nGenerating ${data.steps.length} continuation steps...`;
+        out.style.color = "#FF9800";
+        
+        if (data.steps && data.steps.length > 0) {
+          // Mark continuation steps
+          data.steps.forEach(step => {
+            step.isContinuation = true;
+          });
+          
+          // Add continuation steps to the list
+          const originalLength = generatedSteps.length;
+          generatedSteps.push(...data.steps);
+          
+          // Don't reset index - continue from where we are
+          await saveState();
+          displaySteps(generatedSteps);
+          
+          out.textContent = `📋 Added ${data.steps.length} continuation steps (Steps ${originalLength + 1}-${generatedSteps.length}). Click Next to continue!`;
+          out.style.color = "#4CAF50";
+          
+          console.log("[Popup] Added continuation steps:", data.steps);
+        } else {
+          out.textContent = `❌ Goal not achieved but no continuation steps generated.\n\n${data.reason}`;
+          out.style.color = "#f44336";
+        }
+      }
+    } else {
+      out.textContent = `❌ Failed to verify goal: ${data.message}`;
+      out.style.color = "#f44336";
+    }
+  } catch (e) {
+    console.error("[Popup] Error verifying goal:", e);
+    out.textContent = `Error verifying goal: ${e.message}`;
+    out.style.color = "#f44336";
+  }
+}
+
 // Execute next single action (step or fallback)
 async function nextStep() {
   const out = document.getElementById("out");
@@ -361,29 +505,112 @@ async function nextStep() {
     return;
   }
 
-  // Check if we're done
+  // Check if we're done - verify goal achievement
   if (currentStepIndex >= generatedSteps.length) {
-    out.textContent = "✅ All steps completed!";
-    out.style.color = "#4CAF50";
-    currentStepIndex = 0;
-    currentAlternativeIndex = 0;
-    await saveState();
-    displaySteps(generatedSteps);
+    out.textContent = "🎯 All steps completed! Verifying goal achievement...";
+    out.style.color = "#9C27B0";
+    
+    await verifyGoalCompletion();
     return;
   }
 
   const alternatives = generatedSteps[currentStepIndex];
   
-  // Check if we've exhausted all alternatives for this step - offer to skip
+  // Check if we've exhausted all alternatives for this step - offer AI replacement
   if (currentAlternativeIndex >= alternatives.length) {
-    out.textContent = `❌ Step ${currentStepIndex + 1} FAILED (all ${alternatives.length} alts tried). Click Next again to skip to Step ${currentStepIndex + 2}.`;
-    out.style.color = "#f44336";
+    const failedStep = currentStepIndex + 1;
+    out.textContent = `❌ Step ${failedStep} FAILED (all ${alternatives.length} alts tried). Generating AI replacement...`;
+    out.style.color = "#FF9800";
     
-    // Next click will skip to next step
-    currentStepIndex++;
-    currentAlternativeIndex = 0;
-    await saveState();
-    displaySteps(generatedSteps);
+    // Prompt user
+    const userWantsReplacement = confirm(
+      `Step ${failedStep} failed.\n\nDo you want me to analyze the page and generate a new replacement step based on what's actually available?\n\nThis will insert Step ${failedStep}A with better alternatives.`
+    );
+    
+    if (userWantsReplacement) {
+      out.textContent = "🤖 Analyzing page and generating replacement step...";
+      out.style.color = "#9C27B0";
+      
+      try {
+        // Scrape page elements
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tabs || tabs.length === 0) {
+          out.textContent = "Error: No active tab";
+          out.style.color = "#f44336";
+          return;
+        }
+        
+        const scrapeResult = await new Promise((resolve) => {
+          chrome.tabs.sendMessage(
+            tabs[0].id,
+            { action: "scrapeElements" },
+            (response) => {
+              resolve(response || { success: false });
+            }
+          );
+        });
+        
+        if (!scrapeResult.success) {
+          out.textContent = "❌ Failed to scrape page elements";
+          out.style.color = "#f44336";
+          return;
+        }
+        
+        console.log("[Popup] Scraped elements:", scrapeResult.elements);
+        
+        // Determine the goal from the failed step
+        const failedAction = alternatives[0][0];
+        const failedParam = alternatives[0][1];
+        const goal = `${failedAction}: ${failedParam}`;
+        
+        // Call backend to generate replacement step
+        const response = await fetch("http://localhost:5000/api/generate-replacement-step", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            goal: goal,
+            triedAlternatives: alternatives,
+            pageElements: scrapeResult.elements,
+          }),
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.step) {
+          // Mark as replacement step
+          data.step.isReplacement = true;
+          
+          // Insert replacement step right after the failed one
+          generatedSteps.splice(currentStepIndex + 1, 0, data.step);
+          
+          // Move to the new replacement step
+          currentStepIndex++;
+          currentAlternativeIndex = 0;
+          await saveState();
+          displaySteps(generatedSteps);
+          
+          out.textContent = `✅ Generated Step ${failedStep}A 🤖 with ${data.step.length} alternatives. Click Next to try it!`;
+          out.style.color = "#4CAF50";
+          console.log("[Popup] Inserted replacement step:", data.step);
+        } else {
+          out.textContent = `❌ Failed to generate replacement: ${data.message}`;
+          out.style.color = "#f44336";
+        }
+      } catch (e) {
+        console.error("[Popup] Error generating replacement:", e);
+        out.textContent = `Error: ${e.message}`;
+        out.style.color = "#f44336";
+      }
+    } else {
+      // User declined, skip to next step
+      out.textContent = `⏭️ Skipping Step ${failedStep}. Click Next to continue with Step ${failedStep + 1}.`;
+      out.style.color = "#FF9800";
+      currentStepIndex++;
+      currentAlternativeIndex = 0;
+      await saveState();
+      displaySteps(generatedSteps);
+    }
+    
     return;
   }
 
