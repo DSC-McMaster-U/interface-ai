@@ -1,0 +1,27 @@
+# Ignore build artifacts
+build/
+dist/
+react_vite_frontend/chrome-extension-react-template/build/
+react_vite_frontend/chrome-extension-react-template/public/
+
+# Node modules
+node_modules/
+
+# GitHub metadata
+.github/
+
+# Documentation
+documentation/
+README.md
+
+# Logs
+*.log
+
+# Env files
+.env
+.env.*
+
+*.md
+*.yml
+*.yaml
+*.json
