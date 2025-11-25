@@ -64,3 +64,11 @@ Your React app should now be loaded as a Chrome extension!
 ## License
 
 This project is licensed under the MIT License.
+
+## TO DO
+- [ ] Prompt window
+- [ ] Expanded prompt window
+- [ ] user input handling + state logic
+- [ ] connect to background scripts
+- [ ] finalize design for popup
+- [ ] add e2e user interaction flow
