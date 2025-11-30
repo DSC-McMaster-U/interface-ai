@@ -27,12 +27,18 @@ export default defineConfig({
       input: {
         main: "./index.html",
         background: "./src/background.ts",
+        content: "./src/contentScript.tsx",
       },
       output: {
         entryFileNames: (chunkInfo) => {
-          return chunkInfo.name === "background"
-            ? "background.js"
-            : "assets/[name]-[hash].js";
+          // background script must not be hashed
+          if (chunkInfo.name === "background") return "background.js";
+
+          // content script must not be hashed (MV3 requirement)
+          if (chunkInfo.name === "content") return "contentScript.js";
+
+          // everything else (React app) can be hashed as usual
+          return "assets/[name]-[hash].js";
         },
       },
     },
