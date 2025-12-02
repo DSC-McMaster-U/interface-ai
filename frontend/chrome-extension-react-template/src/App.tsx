@@ -1,7 +1,39 @@
+import { useState } from "react";
 import SettingsIcon from "./assets/settings.svg";
 import CloseIcon from "./assets/close.svg";
+import Settings from "./Settings";
 
 function App() {
+  const [showSettings, setShowSettings] = useState(false);
+  const [message, setMessage] = useState("");
+  const [response, setResponse] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const sendToBackend = async () => {
+    if (!message.trim()) return;
+
+    setLoading(true);
+    setResponse("Sending...");
+
+    try {
+      const res = await fetch("http://localhost:5000/api/relay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: message.trim() }),
+      });
+      const data = await res.json();
+      setResponse(`Response: ${data.echo}`);
+    } catch (e) {
+      setResponse(`Error: ${e instanceof Error ? e.message : "Unknown error"}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (showSettings) {
+    return <Settings onClose={() => setShowSettings(false)} />;
+  }
+
   return (
     <>
       <div className="flex flex-col w-[279px] h-[437px] gap-2">
@@ -9,7 +41,7 @@ function App() {
           {/* add logo jpg as well */}
           <h1 className="text-lg">InterfaceAI</h1>
           <div className="flex flex-row gap-2">
-            <button>
+            <button onClick={() => setShowSettings(true)}>
               <img src={SettingsIcon} className="w-5 h-5 cursor-pointer" />
             </button>
             <button>
@@ -32,9 +64,36 @@ function App() {
             <div>site.com</div>
           </div>
         </div>
+
+        {/* Send to Backend Section */}
+        <div className="flex flex-col items-center px-4 py-2 gap-2">
+          <div className="w-full flex gap-2">
+            <input
+              type="text"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyPress={(e) => e.key === "Enter" && sendToBackend()}
+              placeholder="Type your message..."
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+            <button
+              onClick={sendToBackend}
+              disabled={loading || !message.trim()}
+              className="px-4 py-2 bg-blue-500 text-black rounded-md text-sm font-medium hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              Send
+            </button>
+          </div>
+          {response && (
+            <div className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-xs text-gray-800">
+              {response}
+            </div>
+          )}
+        </div>
+
         {/* should have more functionality here, figure out what it needs*/}
-        <div className="flex justify-center items-center px-4 py-4 mt-10">
-          <div className="relative flex flex-col overflow-y-scroll rounded-lg overflow-x-auto p-2 gap-1 border-2 border-black text-black h-50 whitespace-nowrap no-scrollbar">
+        <div className="flex justify-center items-center px-4 py-2">
+          <div className="relative flex flex-col overflow-y-scroll rounded-lg overflow-x-auto p-2 gap-1 border-2 border-black text-black h-32 whitespace-nowrap no-scrollbar">
             <ul className="space-y-1 text-sm whitespace-nowrap">
               {/* turn this into custom logs w/ highlights and color coded */}
               <li>

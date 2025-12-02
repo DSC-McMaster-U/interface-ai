@@ -44,8 +44,8 @@ jobs:
 
       - name: Install dependencies
         run: npm install
-        working-directory: ./frontend
+        working-directory: ./frontend/chrome-extension-react-template
 
       - name: Run tests
         run: npm test
-        working-directory: ./frontend
+        working-directory: ./frontend/chrome-extension-react-template

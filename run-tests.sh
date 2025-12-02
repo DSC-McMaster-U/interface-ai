@@ -24,8 +24,8 @@ echo "Vision-AI tests passed"
 echo ""
 
 echo "Running frontend tests..."
-cd frontend
+cd frontend/chrome-extension-react-template
 npm test || { echo "Frontend tests failed"; exit 1; }
-cd ..
+cd ../..
 echo "Frontend tests passed"
 echo ""
