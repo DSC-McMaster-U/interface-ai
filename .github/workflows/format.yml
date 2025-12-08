@@ -44,8 +44,8 @@ jobs:
 
       - name: Install prettier
         run: npm install
-        working-directory: ./frontend/chrome-extension-react-template
+        working-directory: ./frontend
 
       - name: Check JS formatting
         run: npx prettier --check .
-        working-directory: ./frontend/chrome-extension-react-template
+        working-directory: ./frontend
