@@ -4,10 +4,8 @@
   "version": "0.1.0",
   "description": "Minimal Chrome extension frontend for InterfaceAI",
   "action": {
-    "default_popup": "index.html"
-  },
-  "background": {
-    "service_worker": "background.js"
+    "default_popup": "./popup/popup.html",
+    "default_title": "InterfaceAI"
   },
   "permissions": ["tabs"],
   "host_permissions": ["http://localhost:5000/*"]
