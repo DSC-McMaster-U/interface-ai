@@ -23,9 +23,9 @@ cd ..
 echo "JavaScript code formatted"
 echo ""
 
-echo "Linting JavaScript code with ESLint..."
-cd frontend/chrome-extension-react-template
+echo "Linting TypeScript code with ESLint..."
+cd frontend
 npx eslint . --fix --ignore-pattern "build/**" || { echo "ESLint linting failed"; exit 1; }
-cd ../..
-echo "JavaScript linting passed"
+cd ..
+echo "TypeScript linting passed"
 echo ""

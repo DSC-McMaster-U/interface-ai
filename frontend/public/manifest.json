@@ -4,9 +4,28 @@
   "version": "0.1.0",
   "description": "Minimal Chrome extension frontend for InterfaceAI",
   "action": {
-    "default_popup": "./popup/popup.html",
-    "default_title": "InterfaceAI"
+    "default_title": "InterfaceAI - Click to activate"
   },
-  "permissions": ["tabs"],
-  "host_permissions": ["http://localhost:5000/*"]
+  "permissions": ["activeTab", "scripting", "tabs"],
+  "host_permissions": ["http://localhost:5000/*", "<all_urls>"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "commands": {
+    "toggle-overlay": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
+      },
+      "description": "Toggle InterfaceAI overlay"
+    },
+    "open-settings": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+U",
+        "mac": "Command+Shift+U"
+      },
+      "description": "Open InterfaceAI settings"
+    }
+  }
 }
