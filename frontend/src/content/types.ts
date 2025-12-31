@@ -34,3 +34,13 @@ export interface UpdateUserSettingsMessage {
   type: "UPDATE_USER_SETTINGS";
   payload: UserSettings;
 }
+
+export interface CaptureScreenshotMessage {
+  type: "CAPTURE_SCREENSHOT";
+}
+
+export interface ScreenshotResponse {
+  success: boolean;
+  imageData?: string; // Base64 encoded image data URL
+  error?: string;
+}

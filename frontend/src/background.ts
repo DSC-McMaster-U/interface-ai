@@ -28,6 +28,20 @@ interface UpdateUserSettingsMessage {
   payload: UserSettings;
 }
 
+interface CaptureScreenshotMessage {
+  type: "CAPTURE_SCREENSHOT";
+}
+
+interface RequestWebsiteInfoFromContentMessage {
+  type: "REQUEST_WEBSITE_INFO_FROM_CONTENT";
+}
+
+interface ScreenshotResponse {
+  success: boolean;
+  imageData?: string;
+  error?: string;
+}
+
 interface ApiResponse {
   success: boolean;
   data?: unknown;
@@ -139,6 +153,70 @@ async function updateUserSettings(
 }
 
 /**
+ * Capture a screenshot of the current visible tab
+ */
+async function captureScreenshot(): Promise<ScreenshotResponse> {
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const activeTab = tabs[0];
+
+    const imageData = await chrome.tabs.captureVisibleTab(activeTab.windowId, {
+      format: "png",
+      quality: 100,
+    });
+
+    console.log("[InterfaceAI Background] Screenshot captured successfully");
+
+    return {
+      success: true,
+      imageData, // This is a base64 data URL (e.g., "data:image/png;base64,...")
+    };
+  } catch (error) {
+    console.error("[InterfaceAI Background] Screenshot capture error:", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to capture screenshot",
+    };
+  }
+}
+
+/**
+ * Request website info from the content script (for backend-initiated requests)
+ */
+async function requestWebsiteInfoFromContent(): Promise<ApiResponse> {
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const activeTab = tabs[0];
+
+    if (!activeTab?.id) {
+      return {
+        success: false,
+        error: "No active tab found",
+      };
+    }
+
+    const response = await chrome.tabs.sendMessage(activeTab.id, {
+      type: "REQUEST_WEBSITE_INFO",
+    });
+
+    return response;
+  } catch (error) {
+    console.error(
+      "[InterfaceAI Background] Request website info error:",
+      error,
+    );
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to request website info",
+    };
+  }
+}
+
+/**
  * Listen for messages from content scripts
  */
 chrome.runtime.onMessage.addListener(
@@ -147,9 +225,11 @@ chrome.runtime.onMessage.addListener(
       | ApiRequestMessage
       | GetUserSettingsMessage
       | UpdateUserSettingsMessage
+      | CaptureScreenshotMessage
+      | RequestWebsiteInfoFromContentMessage
       | { type: string },
     _sender: chrome.runtime.MessageSender,
-    sendResponse: (response: ApiResponse) => void,
+    sendResponse: (response: ApiResponse | ScreenshotResponse) => void,
   ) => {
     console.log("[InterfaceAI Background] Received message:", message.type);
 
@@ -164,7 +244,6 @@ chrome.runtime.onMessage.addListener(
           });
         });
 
-      // Return true to indicate we'll send a response asynchronously
       return true;
     }
 
@@ -199,19 +278,99 @@ chrome.runtime.onMessage.addListener(
       return true;
     }
 
+    // Handle screenshot capture request
+    if (message.type === "CAPTURE_SCREENSHOT") {
+      captureScreenshot()
+        .then(sendResponse)
+        .catch((error) => {
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Failed to capture screenshot",
+          });
+        });
+
+      return true;
+    }
+
+    // Handle request to get website info from content script (triggered by backend)
+    if (message.type === "REQUEST_WEBSITE_INFO_FROM_CONTENT") {
+      requestWebsiteInfoFromContent()
+        .then(sendResponse)
+        .catch((error) => {
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Failed to request website info from content",
+          });
+        });
+
+      return true;
+    }
+
     return false;
   },
 );
 
-/**
- * Console message on install
- */
 chrome.runtime.onInstalled.addListener((details) => {
   console.log(
     "[InterfaceAI] Extension",
     details.reason,
     chrome.runtime.getManifest().version,
   );
+});
+
+/**
+ * Polling Configuration
+ * The extension polls the backend for pending requests since service workers
+ * cannot receive incoming HTTP requests directly.
+ */
+const POLLING_INTERVAL_MS = 1000;
+let pollingEnabled = true;
+
+interface PollResponse {
+  pending: boolean;
+}
+
+/**
+ * Poll the backend for pending requests
+ * Backend should return { pending: true } if it needs website info
+ */
+async function pollForPendingRequests(): Promise<void> {
+  if (!pollingEnabled) return;
+
+  try {
+    const response = await fetch(`${BACKEND_API}/api/pending-requests`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (!response.ok) return;
+
+    const data: PollResponse = await response.json();
+
+    if (data.pending) {
+      console.log("[InterfaceAI Background] Backend requested website info");
+      await requestWebsiteInfoFromContent();
+    }
+  } catch (error) {
+    // Silently fail
+  }
+}
+
+// Start polling using Chrome alarms
+chrome.alarms.create("pollBackend", {
+  periodInMinutes: POLLING_INTERVAL_MS / 60000,
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "pollBackend") {
+    pollForPendingRequests();
+  }
 });
 
 /**
@@ -222,7 +381,6 @@ async function toggleOverlay(tab: chrome.tabs.Tab): Promise<void> {
   if (!tab.id) return;
 
   try {
-    // Send message to content script to toggle overlay visibility
     await chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_OVERLAY" });
   } catch (error) {
     // Content script might not be loaded yet, try injecting it

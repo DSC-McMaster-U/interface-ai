@@ -3,6 +3,7 @@
  */
 
 import type { ApiRequestMessage, ApiResponse } from "./types";
+import { captureWebsiteInfo } from "./website-info";
 
 /**
  * Add a message to the chat container
@@ -19,8 +20,6 @@ export function addMessage(
   messageEl.className = `message ${type}`;
   messageEl.textContent = text;
   container.appendChild(messageEl);
-
-  // Scroll to bottom
   container.scrollTop = container.scrollHeight;
 }
 
@@ -34,7 +33,6 @@ export function showLoading(
   const container = shadowRoot?.getElementById("messages-container");
   if (!container) return;
 
-  // Remove existing loading indicator
   const existing = container.querySelector(".loading");
   if (existing) existing.remove();
 
@@ -99,12 +97,17 @@ export function setupInput(
     handlers.showLoading(true);
 
     try {
+      const websiteInfo = await captureWebsiteInfo();
+
       const response = await handlers.sendToBackground({
         type: "API_REQUEST",
         payload: {
           endpoint: "/api/relay",
           method: "POST",
-          body: { message },
+          body: {
+            message,
+            websiteInfo,
+          },
         },
       });
 
