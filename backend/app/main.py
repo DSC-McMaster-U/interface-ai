@@ -238,7 +238,7 @@ def generate_steps():
         import google.generativeai as genai
         
         # Configure Gemini
-        GEMINI_API_KEY = "AIzaSyAcBF9LfX5Pa-zXdqYt7SBIJkemj4bTTuo"
+        GEMINI_API_KEY = "AIzaSyAUSeBb4bjn_Y5lx6F1rpL3uoh7W_fLQIU"
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-2.5-flash')
         
@@ -639,3 +639,4 @@ if __name__ == "__main__":
     # threaded=False ensures all requests are handled in the same thread
     print("[Backend] 🔧 Starting Flask in single-threaded mode for Playwright compatibility...")
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), threaded=False)
+
