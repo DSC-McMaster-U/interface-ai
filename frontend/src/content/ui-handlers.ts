@@ -99,23 +99,60 @@ export function setupInput(
     handlers.showLoading(true);
 
     try {
-      const response = await handlers.sendToBackground({
-        type: "API_REQUEST",
-        payload: {
-          endpoint: "/api/relay",
-          method: "POST",
-          body: { message },
-        },
-      });
+      const BACKEND_API = "http://localhost:5000";
+      const url = `${BACKEND_API}/api/relay`;
+      
+      // Use fetch with streaming (handles CORS better than EventSource)
+      const response = await fetch(`${url}?message=${encodeURIComponent(message)}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
 
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let firstMessage = true;
+
+      if (!reader) {
+        throw new Error("No response body");
+      }
+
+      // Read the stream
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) break;
+
+        // Decode the chunk
+        const chunk = decoder.decode(value, { stream: true });
+        
+        // Parse SSE lines (format: "data: {...}\n\n")
+        const lines = chunk.split("\n");
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const jsonStr = line.slice(6); // Remove "data: " prefix
+            try {
+              const data = JSON.parse(jsonStr);
+              
+              // Remove loading on first message
+              if (firstMessage) {
+                handlers.showLoading(false);
+                firstMessage = false;
+              }
+
+              if (data.message) {
+                handlers.addMessage(data.message, "assistant");
+              }
+            } catch {
+              // Skip invalid JSON lines
+            }
+          }
+        }
+      }
+
+      // Make sure loading is hidden
       handlers.showLoading(false);
 
-      if (response.success) {
-        const data = response.data as { echo?: string };
-        handlers.addMessage(data.echo || "Message received", "assistant");
-      } else {
-        handlers.addMessage(`Error: ${response.error}`, "error");
-      }
     } catch (error) {
       handlers.showLoading(false);
       handlers.addMessage(
