@@ -1,5 +1,8 @@
 // ============================================
-// InterfaceAI - Terminal Browser Automation
+// automation.js - Content Script For Action Execution
+/**Implement ways to click on a coordinate, click on a button/link based on its name, scroll up,
+ *  scroll down, fill out a input box/field based on its name, click on the first search result.
+ *  This must be configured as simple functions which take in needed parameters and do the action easily. */
 // ============================================
 
 const puppeteer = require('puppeteer');
