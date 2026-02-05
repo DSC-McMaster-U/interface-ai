@@ -10,15 +10,8 @@
   "icons": {
     "128": "logo_128px.svg"
   },
-  "permissions": [
-    "activeTab",
-    "scripting",
-    "tabs"
-  ],
-  "host_permissions": [
-    "http://localhost:5000/*",
-    "<all_urls>"
-  ],
+  "permissions": ["activeTab", "scripting", "tabs"],
+  "host_permissions": ["http://localhost:5000/*", "<all_urls>"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
