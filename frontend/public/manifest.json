@@ -4,10 +4,21 @@
   "version": "0.1.0",
   "description": "Minimal Chrome extension frontend for InterfaceAI",
   "action": {
-    "default_title": "InterfaceAI - Click to activate"
+    "default_title": "InterfaceAI - Click to activate",
+    "default_icon": "logo_128px.svg"
   },
-  "permissions": ["activeTab", "scripting", "tabs"],
-  "host_permissions": ["http://localhost:5000/*", "<all_urls>"],
+  "icons": {
+    "128": "logo_128px.svg"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://localhost:5000/*",
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"
