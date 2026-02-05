@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "InterfaceAI MVP",
   "version": "0.1.0",
-  "description": "Minimal Chrome extension frontend for InterfaceAI",
+  "description": "Chrome extension for InterfaceAI",
   "action": {
     "default_title": "InterfaceAI - Click to activate",
     "default_icon": "logo_128px.svg"
