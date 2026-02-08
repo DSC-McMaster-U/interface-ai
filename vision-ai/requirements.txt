@@ -9,5 +9,6 @@ numpy
 torch
 torchvision
 transformers
+timm
 google-genai
 python-dotenv
