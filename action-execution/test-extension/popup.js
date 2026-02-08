@@ -17,6 +17,7 @@ function escHtml(str) {
 }
 
 function summarize(obj) {
+  if (obj.dataUrl) return 'Screenshot captured';
   if (obj.title && obj.url) return 'Page: "' + obj.title + '"';
   if (obj.text)  return obj.text;
   if (obj.url)   return obj.url;
@@ -80,6 +81,8 @@ function parseCommand(raw) {
       return { action: 'goForward', params: {} };
     case 'status':
       return { action: 'getPageStatus', params: {} };
+    case 'screenshot':
+      return { action: 'screenshot', params: {} };
     case 'result':
     case 'first':
       return { action: 'clickFirstSearchResult', params: {} };

@@ -8,6 +8,8 @@
 
 const { WebSocketServer } = require('ws');
 const readline = require('readline');
+const fs = require('fs');
+const path = require('path');
 
 const PORT = 7878;
 var activeSocket = null;
@@ -105,12 +107,13 @@ function parseCommand(raw) {
     case 'goto':
     case 'go':
       return { action: 'goto', params: { url: parts.slice(1).join(' ') } };
-    case 'back':    return { action: 'goBack',    params: {} };
-    case 'forward': return { action: 'goForward', params: {} };
-    case 'status':  return { action: 'getPageStatus', params: {} };
+    case 'back':       return { action: 'goBack',    params: {} };
+    case 'forward':    return { action: 'goForward', params: {} };
+    case 'status':     return { action: 'getPageStatus', params: {} };
+    case 'screenshot': return { action: 'screenshot', params: { filename: parts[1] } };
     case 'result':
-    case 'first':   return { action: 'clickFirstSearchResult', params: {} };
-    default:        return null;
+    case 'first':      return { action: 'clickFirstSearchResult', params: {} };
+    default:           return null;
   }
 }
 
@@ -144,6 +147,23 @@ function printResult(result) {
   console.log('  ' + color + icon + '\x1b[0m ' + summary + '\n');
 }
 
+// ── Save Screenshot ──
+
+function saveScreenshot(result, filename) {
+  if (!result || !result.dataUrl) {
+    printResult(result);
+    return;
+  }
+
+  var name = filename || 'screenshot-' + Date.now() + '.png';
+  if (!name.endsWith('.png')) name += '.png';
+
+  var base64 = result.dataUrl.replace(/^data:image\/png;base64,/, '');
+  var filePath = path.resolve(name);
+  fs.writeFileSync(filePath, Buffer.from(base64, 'base64'));
+  console.log('  \x1b[32m✓\x1b[0m Screenshot saved → ' + filePath + '\n');
+}
+
 // ── REPL ──
 
 var rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -161,6 +181,7 @@ function showHelp() {
   console.log('  goto <url>            Navigate to URL');
   console.log('  back / forward        Browser history');
   console.log('  status                Inspect the page');
+  console.log('  screenshot [name]     Save screenshot as PNG');
   console.log('  result                Click first search result');
   console.log('  help                  Show this message');
   console.log('  exit                  Quit\x1b[0m\n');
@@ -188,7 +209,11 @@ function prompt() {
     }
 
     send(parsed.action, parsed.params).then(function (result) {
-      printResult(result);
+      if (parsed.action === 'screenshot') {
+        saveScreenshot(result, parsed.params.filename);
+      } else {
+        printResult(result);
+      }
       prompt();
     });
   });

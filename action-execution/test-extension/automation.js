@@ -14,38 +14,40 @@
   // ── Action Functions ──
 
   function clickAtCoordinate(x, y) {
-    const el = document.elementFromPoint(x, y);
-    if (!el) return { success: false, error: `No element at (${x}, ${y})` };
+    var el = document.elementFromPoint(x, y);
+    if (!el) return { success: false, error: 'No element at (' + x + ', ' + y + ')' };
 
-    const opts = { bubbles: true, cancelable: true, clientX: x, clientY: y };
+    var opts = { bubbles: true, cancelable: true, clientX: x, clientY: y };
     el.dispatchEvent(new MouseEvent('mousedown', opts));
     el.dispatchEvent(new MouseEvent('mouseup', opts));
     el.dispatchEvent(new MouseEvent('click', opts));
 
     return {
-      success: true, x, y,
+      success: true, x: x, y: y,
       element: el.tagName,
       text: (el.textContent || '').trim().substring(0, 80)
     };
   }
 
   function clickByName(name, exactMatch) {
-    const selectors = ['button', 'a', '[role="button"]', 'input[type="button"]', 'input[type="submit"]'];
-    const lower = name.toLowerCase();
+    var selectors = ['button', 'a', '[role="button"]', 'input[type="button"]', 'input[type="submit"]'];
+    var lower = name.toLowerCase();
 
-    for (const selector of selectors) {
-      for (const el of document.querySelectorAll(selector)) {
-        const text = (el.textContent?.trim() || el.value || el.getAttribute('aria-label') || '');
-        const matches = exactMatch
+    for (var s = 0; s < selectors.length; s++) {
+      var els = document.querySelectorAll(selectors[s]);
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        var text = (el.textContent?.trim() || el.value || el.getAttribute('aria-label') || '');
+        var matches = exactMatch
           ? text.toLowerCase() === lower
           : text.toLowerCase().includes(lower);
         if (matches) {
           el.click();
-          return { success: true, element: el.tagName, text };
+          return { success: true, element: el.tagName, text: text };
         }
       }
     }
-    return { success: false, error: `No element found: "${name}"` };
+    return { success: false, error: 'No element found: "' + name + '"' };
   }
 
   function scrollUp(pixels)    { window.scrollBy(0, -(pixels || 500)); return { success: true, scrolledBy: -(pixels || 500) }; }
@@ -54,26 +56,27 @@
   function scrollToBottom()    { window.scrollTo(0, document.body.scrollHeight); return { success: true }; }
 
   function fillInput(identifier, value) {
-    const lower = identifier.toLowerCase();
-    let input =
-      document.querySelector(`input[name="${identifier}" i], textarea[name="${identifier}" i]`) ||
-      document.querySelector(`#${CSS.escape(identifier)}`) ||
-      document.querySelector(`input[placeholder*="${identifier}" i], textarea[placeholder*="${identifier}" i]`) ||
-      document.querySelector(`input[aria-label*="${identifier}" i], textarea[aria-label*="${identifier}" i]`);
+    var lower = identifier.toLowerCase();
+    var input =
+      document.querySelector('input[name="' + identifier + '" i], textarea[name="' + identifier + '" i]') ||
+      document.querySelector('#' + CSS.escape(identifier)) ||
+      document.querySelector('input[placeholder*="' + identifier + '" i], textarea[placeholder*="' + identifier + '" i]') ||
+      document.querySelector('input[aria-label*="' + identifier + '" i], textarea[aria-label*="' + identifier + '" i]');
 
     if (!input) {
-      for (const label of document.querySelectorAll('label')) {
-        if (label.textContent.toLowerCase().includes(lower)) {
-          input = label.getAttribute('for')
-            ? document.getElementById(label.getAttribute('for'))
-            : label.querySelector('input, textarea');
+      var labels = document.querySelectorAll('label');
+      for (var i = 0; i < labels.length; i++) {
+        if (labels[i].textContent.toLowerCase().includes(lower)) {
+          input = labels[i].getAttribute('for')
+            ? document.getElementById(labels[i].getAttribute('for'))
+            : labels[i].querySelector('input, textarea');
           if (input) break;
         }
       }
     }
 
     if (!input) {
-      const typeMap = {
+      var typeMap = {
         search:   'input[type="search"], input[name*="search" i]',
         email:    'input[type="email"]',
         password: 'input[type="password"]',
@@ -81,9 +84,9 @@
       if (typeMap[lower]) input = document.querySelector(typeMap[lower]);
     }
 
-    if (!input) return { success: false, error: `No input found: "${identifier}"` };
+    if (!input) return { success: false, error: 'No input found: "' + identifier + '"' };
 
-    const setter =
+    var setter =
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set ||
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
 
@@ -97,17 +100,17 @@
   }
 
   function clickFirstSearchResult() {
-    const selectors = [
+    var selectors = [
       '#search a h3', '#rso a h3', 'div.g a h3',
       '#b_results .b_algo h2 a',
       '[data-testid="result-title-a"]',
       '.result__a',
       'main a h2', 'main a h3',
     ];
-    for (const sel of selectors) {
-      const el = document.querySelector(sel);
+    for (var i = 0; i < selectors.length; i++) {
+      var el = document.querySelector(selectors[i]);
       if (el) {
-        const link = el.closest('a') || el;
+        var link = el.closest('a') || el;
         link.click();
         return { success: true, url: link.href, text: el.textContent?.trim() };
       }
@@ -116,26 +119,26 @@
   }
 
   function pressEnter() {
-    const active = document.activeElement || document.body;
+    var active = document.activeElement || document.body;
     active.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
     active.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-    const form = active.closest?.('form');
+    var form = active.closest?.('form');
     if (form) { form.requestSubmit ? form.requestSubmit() : form.submit(); }
     return { success: true };
   }
 
   function pressKey(key) {
-    const active = document.activeElement || document.body;
-    active.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
-    active.dispatchEvent(new KeyboardEvent('keyup',   { key, bubbles: true }));
+    var active = document.activeElement || document.body;
+    active.dispatchEvent(new KeyboardEvent('keydown', { key: key, bubbles: true }));
+    active.dispatchEvent(new KeyboardEvent('keyup',   { key: key, bubbles: true }));
     return { success: true };
   }
 
   function typeText(text) {
-    const active = document.activeElement;
+    var active = document.activeElement;
     if (!active || active === document.body) return { success: false, error: 'No focused input' };
 
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
     if (setter) setter.call(active, (active.value || '') + text);
     else active.value = (active.value || '') + text;
     active.dispatchEvent(new Event('input', { bubbles: true }));
@@ -152,26 +155,36 @@
         maxScroll: document.body.scrollHeight,
         percent: Math.round((window.scrollY / Math.max(1, document.body.scrollHeight - window.innerHeight)) * 100),
       },
-      headings: [...document.querySelectorAll('h1,h2,h3')].slice(0, 15).map(h => ({
-        level: h.tagName, text: h.textContent.trim().substring(0, 100),
-      })),
-      buttons: [...document.querySelectorAll('button, [role="button"], input[type="submit"]')].slice(0, 20).map(b => ({
-        text: (b.textContent?.trim() || b.value || b.getAttribute('aria-label') || '').substring(0, 50),
-      })),
-      textboxes: [...document.querySelectorAll('input:not([type="hidden"]), textarea')].slice(0, 15).map(i => ({
-        name: i.name || i.id || i.placeholder || 'unnamed',
-        type: i.type || 'text',
-      })),
-      links: [...document.querySelectorAll('a[href]')].slice(0, 20).map(a => ({
-        text: (a.textContent || '').trim().substring(0, 50),
-        href: a.href.substring(0, 100),
-      })),
+      headings: [].slice.call(document.querySelectorAll('h1,h2,h3'), 0, 15).map(function (h) {
+        return { level: h.tagName, text: h.textContent.trim().substring(0, 100) };
+      }),
+      buttons: [].slice.call(document.querySelectorAll('button, [role="button"], input[type="submit"]'), 0, 20).map(function (b) {
+        return { text: (b.textContent?.trim() || b.value || b.getAttribute('aria-label') || '').substring(0, 50) };
+      }),
+      textboxes: [].slice.call(document.querySelectorAll('input:not([type="hidden"]), textarea'), 0, 15).map(function (i) {
+        return { name: i.name || i.id || i.placeholder || 'unnamed', type: i.type || 'text' };
+      }),
+      links: [].slice.call(document.querySelectorAll('a[href]'), 0, 20).map(function (a) {
+        return { text: (a.textContent || '').trim().substring(0, 50), href: a.href.substring(0, 100) };
+      }),
     };
   }
 
-  function gotoUrl(url) { window.location.href = url; return { success: true, url }; }
+  function gotoUrl(url) { window.location.href = url; return { success: true, url: url }; }
   function goBack()     { window.history.back();       return { success: true }; }
   function goForward()  { window.history.forward();    return { success: true }; }
+
+  // ── Screenshot (async — goes through background.js) ──
+
+  function requestScreenshot(callback) {
+    chrome.runtime.sendMessage({ action: 'screenshot' }, function (result) {
+      if (chrome.runtime.lastError) {
+        callback({ success: false, error: chrome.runtime.lastError.message });
+      } else {
+        callback(result);
+      }
+    });
+  }
 
   // ── Command Router ──
 
@@ -194,7 +207,7 @@
         case 'goBack':                return goBack();
         case 'goForward':             return goForward();
         case 'ping':                  return { success: true, pong: true };
-        default:                      return { success: false, error: `Unknown action: ${action}` };
+        default:                      return { success: false, error: 'Unknown action: ' + action };
       }
     } catch (err) {
       return { success: false, error: err.message };
@@ -203,22 +216,26 @@
 
   // ── Listener 1: Chrome Messages (popup / background.js) ──
 
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    const result = execute(message.action, message.params || {});
+  chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+    if (message.action === 'screenshot') {
+      // Screenshot is handled by background, not here
+      return false;
+    }
+    var result = execute(message.action, message.params || {});
     sendResponse(result);
     return true;
   });
 
   // ── Listener 2: WebSocket (terminal CLI) ──
 
-  let ws = null;
-  let reconnectDelay = 2000;
+  var ws = null;
+  var reconnectDelay = 2000;
 
   function connectWS() {
     try {
       ws = new WebSocket('ws://localhost:7878');
 
-      ws.onopen = () => {
+      ws.onopen = function () {
         console.log('[InterfaceAI] Connected to CLI server');
         reconnectDelay = 2000;
         ws.send(JSON.stringify({
@@ -228,20 +245,29 @@
         }));
       };
 
-      ws.onmessage = (event) => {
-        let msg;
-        try { msg = JSON.parse(event.data); } catch { return; }
-        const result = execute(msg.action, msg.params || {});
-        ws.send(JSON.stringify({ type: 'result', id: msg.id, result }));
+      ws.onmessage = function (event) {
+        var msg;
+        try { msg = JSON.parse(event.data); } catch (e) { return; }
+
+        // Screenshot is async — handle separately
+        if (msg.action === 'screenshot') {
+          requestScreenshot(function (result) {
+            ws.send(JSON.stringify({ type: 'result', id: msg.id, result: result }));
+          });
+          return;
+        }
+
+        var result = execute(msg.action, msg.params || {});
+        ws.send(JSON.stringify({ type: 'result', id: msg.id, result: result }));
       };
 
-      ws.onclose = () => {
+      ws.onclose = function () {
         setTimeout(connectWS, reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 1.5, 15000);
       };
 
-      ws.onerror = () => ws.close();
-    } catch {
+      ws.onerror = function () { ws.close(); };
+    } catch (e) {
       setTimeout(connectWS, reconnectDelay);
     }
   }

@@ -3,7 +3,7 @@
   "name": "InterfaceAI",
   "version": "1.0.0",
   "description": "Browser automation from your terminal or popup.",
-  "permissions": ["activeTab", "scripting"],
+  "permissions": ["activeTab", "scripting", "tabs"],
   "action": {
     "default_popup": "popup.html"
   },
