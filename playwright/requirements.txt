@@ -1,4 +1,5 @@
-# Python deps for the Playwright worker
-# Note: defaultdict is from Python stdlib (collections), no install needed.
+# Python deps for the Playwright worker and HTTP API (app.py)
 requests==2.32.3
+flask==3.0.3
+playwright==1.49.0
 pytest==8.3.4

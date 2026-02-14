@@ -4,11 +4,102 @@ import os
 import json
 import time
 
+from app.services import (
+    vision_ai_health,
+    vision_ai_analyze,
+    playwright_health,
+    playwright_navigate,
+    playwright_click,
+    playwright_fill,
+)
+
 app = Flask(__name__)
 # Allow all origins in development for easier testing
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-# easily call python functions in other folders like vision-ai, playwright, etc. by using invoking their api endpoints
+# ---------------------------------------------------------------------------
+# Vision-AI proxy / relay
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/vision/health")
+def api_vision_health():
+    """Check Vision-AI service health."""
+    ok, msg = vision_ai_health()
+    if ok:
+        return jsonify({"status": "ok", "vision_ai": msg}), 200
+    return jsonify({"status": "error", "vision_ai": msg}), 503
+
+
+@app.post("/api/vision/analyze")
+def api_vision_analyze():
+    """Call Vision-AI POST /analyze. Body: { \"text\": \"...\" }."""
+    data = request.get_json(silent=True) or {}
+    text = data.get("text", "")
+    ok, result, err = vision_ai_analyze(text)
+    if ok:
+        return jsonify(result), 200
+    return jsonify({"error": err, "detail": result}), 503
+
+
+# ---------------------------------------------------------------------------
+# Playwright proxy / relay
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/playwright/health")
+def api_playwright_health():
+    """Check Playwright service health."""
+    ok, msg = playwright_health()
+    if ok:
+        return jsonify({"status": "ok", "playwright": msg}), 200
+    return jsonify({"status": "error", "playwright": msg}), 503
+
+
+@app.post("/api/playwright/navigate")
+def api_playwright_navigate():
+    """Call Playwright navigate. Body: { \"url\": \"https://...\" }."""
+    data = request.get_json(silent=True) or {}
+    url = data.get("url", "").strip()
+    if not url:
+        return jsonify({"error": "missing url"}), 400
+    ok, result, err = playwright_navigate(url)
+    if ok:
+        return jsonify(result), 200
+    return jsonify({"error": err, "detail": result}), 503
+
+
+@app.post("/api/playwright/click")
+def api_playwright_click():
+    """Call Playwright click. Body: { \"text\": \"Submit\", \"exact\": false }."""
+    data = request.get_json(silent=True) or {}
+    text = data.get("text", "").strip()
+    exact = data.get("exact", False)
+    if not text:
+        return jsonify({"error": "missing text"}), 400
+    ok, result, err = playwright_click(text, exact=exact)
+    if ok:
+        return jsonify(result), 200
+    return jsonify({"error": err, "detail": result}), 503
+
+
+@app.post("/api/playwright/fill")
+def api_playwright_fill():
+    """Call Playwright fill. Body: { \"field\": \"email\", \"value\": \"a@b.com\" }."""
+    data = request.get_json(silent=True) or {}
+    field = data.get("field", "").strip()
+    value = data.get("value", "")
+    if not field:
+        return jsonify({"error": "missing field"}), 400
+    ok, result, err = playwright_fill(field, value)
+    if ok:
+        return jsonify(result), 200
+    return jsonify({"error": err, "detail": result}), 503
+
+
+# ---------------------------------------------------------------------------
+# Core
+# ---------------------------------------------------------------------------
 
 @app.get("/health")
 def health():

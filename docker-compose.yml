@@ -9,25 +9,34 @@ services:
       - REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgresql://user:password@postgres:5432/interfaceai
       - PYTHONUNBUFFERED=1
+      - VISION_AI_URL=http://vision-ai:6000
+      - PLAYWRIGHT_URL=http://playwright:7000
     depends_on:
       - redis
       - postgres
 
   playwright:
     build: ./playwright
-    depends_on:
-      - backend
+    ports:
+      - "7000:7000"
     environment:
       - BACKEND_URL=http://backend:5000
+      - PORT=7000
+      - PLAYWRIGHT_HEADLESS=true
+    depends_on:
+      - backend
 
   vision-ai:
     build: ./vision-ai
+    ports:
+      - "6000:6000"
     depends_on:
       - backend
     environment:
       - BACKEND_URL=http://backend:5000
+      - PORT=6000
     profiles:
-      - vision
+      - vision  # start with: docker compose --profile vision up
 
   redis:
     image: redis:7
