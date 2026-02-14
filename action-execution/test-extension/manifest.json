@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "InterfaceAI",
+  "version": "1.0.0",
+  "description": "Browser automation from your terminal or popup.",
+  "permissions": ["activeTab", "scripting", "tabs"],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["automation.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
