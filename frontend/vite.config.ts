@@ -16,6 +16,10 @@ export default defineConfig({
           src: "public/manifest.json",
           dest: ".",
         },
+        {
+          src: "public/logo_128px.svg",
+          dest: ".",
+        },
       ],
     }),
   ],
