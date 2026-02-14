@@ -130,13 +130,19 @@ function printResult(result) {
     return;
   }
 
-  if (result.title && result.headings) {
+  if (result.title && result.url && result.scroll) {
     console.log('  ' + color + icon + '\x1b[0m ' + result.title);
     console.log('    URL: ' + result.url);
     console.log('    Scroll: ' + result.scroll.percent + '%');
-    if (result.headings.length)  console.log('    Headings: ' + result.headings.map(function (h) { return h.text; }).join(' | '));
-    if (result.textboxes.length) console.log('    Inputs: ' + result.textboxes.map(function (t) { return t.name; }).join(', '));
-    if (result.buttons.length)   console.log('    Buttons: ' + result.buttons.map(function (b) { return b.text; }).join(', '));
+    if (result.headings && result.headings.length)  console.log('    Headings: ' + result.headings.map(function (h) { return h.text; }).join(' | '));
+    if (result.links && result.links.length)        console.log('    Links: ' + result.links.slice(0, 8).map(function (a) { return a.text || a.href; }).join(', '));
+    if (result.buttons && result.buttons.length)    console.log('    Buttons: ' + result.buttons.map(function (b) { return b.text; }).join(', '));
+    if (result.fillableFields && result.fillableFields.length) console.log('    Fillable: ' + result.fillableFields.map(function (f) { return f.name; }).join(', '));
+    if (result.searchBoxes && result.searchBoxes.length)       console.log('    Search: ' + result.searchBoxes.map(function (s) { return s.name; }).join(', '));
+    if (result.sliders && result.sliders.length)    console.log('    Sliders: ' + result.sliders.map(function (s) { return s.name + '(' + s.value + ')'; }).join(', '));
+    if (result.checkboxes && result.checkboxes.length) console.log('    Checkboxes: ' + result.checkboxes.map(function (c) { return c.name + (c.checked ? '✓' : ''); }).join(', '));
+    if (result.selects && result.selects.length)    console.log('    Selects: ' + result.selects.map(function (s) { return s.name; }).join(', '));
+    if (result.paragraphs && result.paragraphs.length) console.log('    Text: ' + result.paragraphs.slice(0, 3).map(function (p) { return p.substring(0, 60) + (p.length > 60 ? '...' : ''); }).join(' | '));
     console.log();
     return;
   }
@@ -208,11 +214,16 @@ function prompt() {
       return;
     }
 
+    console.log('\x1b[2m→ ' + trimmed + '\x1b[0m');
     send(parsed.action, parsed.params).then(function (result) {
       if (parsed.action === 'screenshot') {
         saveScreenshot(result, parsed.params.filename);
       } else {
         printResult(result);
+        if (parsed.action === 'getPageStatus' && result && result.success !== false) {
+          console.log('\x1b[2mFull status (hashmap):\x1b[0m');
+          console.log(JSON.stringify(result, null, 2));
+        }
       }
       prompt();
     });

@@ -145,7 +145,120 @@
     return { success: true };
   }
 
+  function isVisible(el) {
+    if (!el || !el.getBoundingClientRect) return false;
+    var style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+    var r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  }
+
   function getPageStatus() {
+    var trim = function (s, max) { return ((s || '') + '').trim().substring(0, max || 200); };
+
+    var links = [];
+    document.querySelectorAll('a[href]').forEach(function (a) {
+      if (!isVisible(a)) return;
+      var text = trim(a.textContent, 80);
+      if (links.length < 50) links.push({ text: text, href: a.href.substring(0, 150) });
+    });
+
+    var buttons = [];
+    document.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"]').forEach(function (b) {
+      if (!isVisible(b)) return;
+      var text = trim(b.textContent || b.value || b.getAttribute('aria-label') || b.getAttribute('title'), 80);
+      if (buttons.length < 40) buttons.push({ text: text, type: b.type || 'button' });
+    });
+
+    var inputs = [];
+    var searchBoxes = [];
+    var fillableFields = [];
+    document.querySelectorAll('input:not([type="hidden"]), textarea').forEach(function (i) {
+      if (!isVisible(i)) return;
+      var name = i.name || i.id || trim(i.placeholder, 50) || 'unnamed';
+      var type = (i.type || 'text').toLowerCase();
+      var item = { name: name, type: type, placeholder: trim(i.placeholder, 60) || null };
+      if (inputs.length < 30) inputs.push(item);
+      if ((type === 'search' || /search/i.test(name) || /search/i.test(i.placeholder || '')) && searchBoxes.length < 10) {
+        searchBoxes.push(item);
+      }
+      if (['text', 'search', 'email', 'password', 'url', 'tel', 'number'].indexOf(type) >= 0 || i.tagName === 'TEXTAREA') {
+        if (fillableFields.length < 25) fillableFields.push(item);
+      }
+    });
+
+    var sliders = [];
+    document.querySelectorAll('input[type="range"]').forEach(function (r) {
+      if (!isVisible(r)) return;
+      if (sliders.length < 15) sliders.push({
+        name: r.name || r.id || 'unnamed',
+        min: parseFloat(r.min) || 0,
+        max: parseFloat(r.max) || 100,
+        value: parseFloat(r.value) || 0,
+      });
+    });
+
+    var checkboxes = [];
+    document.querySelectorAll('input[type="checkbox"]').forEach(function (c) {
+      if (!isVisible(c)) return;
+      var label = '';
+      var id = c.id;
+      if (id) {
+        var lbl = document.querySelector('label[for="' + id.replace(/"/g, '\\"') + '"]');
+        if (lbl) label = trim(lbl.textContent, 60);
+      }
+      if (!label && c.parentNode && c.parentNode.tagName === 'LABEL') label = trim(c.parentNode.textContent, 60);
+      if (checkboxes.length < 25) checkboxes.push({ name: c.name || c.id || 'unnamed', checked: !!c.checked, label: label || null });
+    });
+
+    var selects = [];
+    document.querySelectorAll('select').forEach(function (s) {
+      if (!isVisible(s)) return;
+      var opts = [];
+      [].slice.call(s.options || [], 0, 20).forEach(function (o) {
+        opts.push({ text: trim(o.text, 80), value: o.value, selected: o.selected });
+      });
+      if (selects.length < 15) selects.push({ name: s.name || s.id || 'unnamed', options: opts });
+    });
+
+    var headings = [];
+    document.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(function (h) {
+      if (!isVisible(h)) return;
+      if (headings.length < 25) headings.push({ level: h.tagName, text: trim(h.textContent, 120) });
+    });
+
+    var images = [];
+    document.querySelectorAll('img[src]').forEach(function (img) {
+      if (!isVisible(img)) return;
+      if (images.length < 20) images.push({ alt: trim(img.alt, 100) || null, src: img.src.substring(0, 120) });
+    });
+
+    var paragraphs = [];
+    document.querySelectorAll('p').forEach(function (p) {
+      if (!isVisible(p)) return;
+      var t = trim(p.textContent, 150);
+      if (t && paragraphs.length < 30) paragraphs.push(t);
+    });
+
+    var forms = [];
+    document.querySelectorAll('form').forEach(function (f) {
+      if (!isVisible(f)) return;
+      if (forms.length < 10) forms.push({ action: (f.action || '').substring(0, 100), id: f.id || null });
+    });
+
+    var landmarks = [];
+    document.querySelectorAll('nav, [role="navigation"], main, [role="main"], aside, [role="complementary"], header, footer').forEach(function (el) {
+      if (!isVisible(el)) return;
+      var role = el.getAttribute('role') || el.tagName.toLowerCase();
+      var text = trim(el.textContent, 80);
+      if (landmarks.length < 15) landmarks.push({ type: role, text: text });
+    });
+
+    var iframes = [];
+    document.querySelectorAll('iframe[src]').forEach(function (f) {
+      if (iframes.length < 5) iframes.push({ src: f.src.substring(0, 100) });
+    });
+
     return {
       success: true,
       title: document.title,
@@ -155,18 +268,22 @@
         maxScroll: document.body.scrollHeight,
         percent: Math.round((window.scrollY / Math.max(1, document.body.scrollHeight - window.innerHeight)) * 100),
       },
-      headings: [].slice.call(document.querySelectorAll('h1,h2,h3'), 0, 15).map(function (h) {
-        return { level: h.tagName, text: h.textContent.trim().substring(0, 100) };
-      }),
-      buttons: [].slice.call(document.querySelectorAll('button, [role="button"], input[type="submit"]'), 0, 20).map(function (b) {
-        return { text: (b.textContent?.trim() || b.value || b.getAttribute('aria-label') || '').substring(0, 50) };
-      }),
-      textboxes: [].slice.call(document.querySelectorAll('input:not([type="hidden"]), textarea'), 0, 15).map(function (i) {
-        return { name: i.name || i.id || i.placeholder || 'unnamed', type: i.type || 'text' };
-      }),
-      links: [].slice.call(document.querySelectorAll('a[href]'), 0, 20).map(function (a) {
-        return { text: (a.textContent || '').trim().substring(0, 50), href: a.href.substring(0, 100) };
-      }),
+      links: links,
+      buttons: buttons,
+      inputs: inputs,
+      searchBoxes: searchBoxes,
+      fillableFields: fillableFields,
+      sliders: sliders,
+      checkboxes: checkboxes,
+      selects: selects,
+      headings: headings,
+      images: images,
+      paragraphs: paragraphs,
+      forms: forms,
+      landmarks: landmarks,
+      iframes: iframes,
+      // legacy keys for compatibility
+      textboxes: inputs,
     };
   }
 
@@ -221,7 +338,9 @@
       // Screenshot is handled by background, not here
       return false;
     }
+    console.log('[InterfaceAI] Command (popup):', message.action, message.params || {});
     var result = execute(message.action, message.params || {});
+    console.log('[InterfaceAI] Result:', result);
     sendResponse(result);
     return true;
   });
@@ -251,13 +370,17 @@
 
         // Screenshot is async — handle separately
         if (msg.action === 'screenshot') {
+          console.log('[InterfaceAI] Command (CLI):', 'screenshot', msg.params || {});
           requestScreenshot(function (result) {
+            console.log('[InterfaceAI] Result:', result);
             ws.send(JSON.stringify({ type: 'result', id: msg.id, result: result }));
           });
           return;
         }
 
+        console.log('[InterfaceAI] Command (CLI):', msg.action, msg.params || {});
         var result = execute(msg.action, msg.params || {});
+        console.log('[InterfaceAI] Result:', result);
         ws.send(JSON.stringify({ type: 'result', id: msg.id, result: result }));
       };
 

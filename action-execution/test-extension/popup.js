@@ -18,6 +18,15 @@ function escHtml(str) {
 
 function summarize(obj) {
   if (obj.dataUrl) return 'Screenshot captured';
+  if (obj.title && obj.url && obj.scroll) {
+    var parts = ['Page: "' + obj.title + '"'];
+    var nLinks = (obj.links && obj.links.length) || 0;
+    var nBtns = (obj.buttons && obj.buttons.length) || 0;
+    parts.push(nLinks + ' links', nBtns + ' buttons');
+    if (obj.fillableFields && obj.fillableFields.length) parts.push(obj.fillableFields.length + ' fillable');
+    if (obj.searchBoxes && obj.searchBoxes.length) parts.push(obj.searchBoxes.length + ' search');
+    return parts.join(' | ');
+  }
   if (obj.title && obj.url) return 'Page: "' + obj.title + '"';
   if (obj.text)  return obj.text;
   if (obj.url)   return obj.url;
@@ -120,6 +129,9 @@ function run() {
     var isOk = result && result.success !== false;
     var text = result.error || summarize(result);
     addLog(raw, text, isOk);
+    if (parsed.action === 'getPageStatus' && result && result.success !== false) {
+      console.log('[InterfaceAI] Page status (full hashmap):', result);
+    }
   });
 }
 
@@ -132,8 +144,17 @@ cmdInput.addEventListener('keydown', function (e) {
 
 document.querySelectorAll('.quick-btn').forEach(function (btn) {
   btn.addEventListener('click', function () {
-    cmdInput.value = btn.getAttribute('data-cmd');
-    run();
+    var cmd = btn.getAttribute('data-cmd');
+    var prefill = btn.getAttribute('data-prefill');
+    if (prefill != null) {
+      cmdInput.value = prefill;
+      cmdInput.focus();
+      return;
+    }
+    if (cmd) {
+      cmdInput.value = cmd;
+      run();
+    }
   });
 });
 
