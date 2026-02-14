@@ -2,3 +2,5 @@
 frontend/node_modules/*
 __pycache__/
 .vscode/*
+.env
+vision-ai/tests/output-images/*
