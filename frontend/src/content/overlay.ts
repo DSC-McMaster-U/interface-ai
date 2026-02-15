@@ -13,6 +13,7 @@ import {
   sendToBackground,
   setupInput,
   setupButtons,
+  restoreMessages,
 } from "./ui-handlers";
 import {
   SETTINGS_STYLES,
@@ -21,6 +22,7 @@ import {
   fetchUserSettings,
   updateUserSettings,
 } from "./settings";
+import { TEST_PANEL_STYLES, setupTestPanel } from "./test-panel";
 import type { ApiRequestMessage, UserSettings } from "./types";
 
 export class InterfaceAIOverlay {
@@ -31,8 +33,16 @@ export class InterfaceAIOverlay {
   private dragOffset = { x: 0, y: 0 };
   private resizeStart = { width: 0, height: 0, x: 0, y: 0 };
 
+  private readonly visibilityStorageKey = "interface_ai_overlay_hidden";
+
   constructor() {
     this.init();
+  }
+
+  public appendAgentLog(message: string): void {
+    const text = (message || "").trim();
+    if (!text) return;
+    addMessage(this.shadowRoot, text, "assistant");
   }
 
   private init(): void {
@@ -52,7 +62,7 @@ export class InterfaceAIOverlay {
 
     // Inject styles into Shadow DOM
     const styleElement = document.createElement("style");
-    styleElement.textContent = OVERLAY_STYLES + SETTINGS_STYLES;
+    styleElement.textContent = OVERLAY_STYLES + SETTINGS_STYLES + TEST_PANEL_STYLES;
     this.shadowRoot.appendChild(styleElement);
 
     // Inject HTML into Shadow DOM
@@ -65,6 +75,8 @@ export class InterfaceAIOverlay {
 
     // Setup event listeners
     this.setupEventListeners();
+
+    this.restoreState();
 
     console.log("[InterfaceAI] Overlay injected successfully");
   }
@@ -83,7 +95,16 @@ export class InterfaceAIOverlay {
     });
 
     // Buttons
-    setupButtons(this.shadowRoot, this.container, () => this.toggleSettings());
+    setupButtons(
+      this.shadowRoot,
+      this.container,
+      () => this.toggleSettings(),
+      () => this.toggleTest(),
+      () => this.persistVisibility(true),
+    );
+
+    // Test panel
+    setupTestPanel(this.shadowRoot);
 
     // Input handling
     setupInput(this.shadowRoot, {
@@ -109,14 +130,55 @@ export class InterfaceAIOverlay {
   private toggleSettings(): void {
     const chatView = this.shadowRoot?.getElementById("chat-view");
     const settingsView = this.shadowRoot?.getElementById("settings-view");
-    if (!chatView || !settingsView) return;
+    const testView = this.shadowRoot?.getElementById("test-view");
+    if (!chatView || !settingsView || !testView) return;
 
-    // Toggle between chat and settings views
     if (settingsView.classList.contains("hidden")) {
+      testView.classList.add("hidden");
       this.openSettings();
     } else {
       this.closeSettings();
     }
+  }
+
+  private toggleTest(): void {
+    const chatView = this.shadowRoot?.getElementById("chat-view");
+    const settingsView = this.shadowRoot?.getElementById("settings-view");
+    const testView = this.shadowRoot?.getElementById("test-view");
+    if (!chatView || !settingsView || !testView) return;
+
+    if (testView.classList.contains("hidden")) {
+      this.openTest();
+    } else {
+      this.closeTest();
+    }
+  }
+
+  private openTest(): void {
+    const chatView = this.shadowRoot?.getElementById("chat-view");
+    const settingsView = this.shadowRoot?.getElementById("settings-view");
+    const testView = this.shadowRoot?.getElementById("test-view");
+    if (!chatView || !settingsView || !testView) return;
+
+    chatView.classList.add("hidden");
+    settingsView.classList.add("hidden");
+    testView.classList.remove("hidden");
+
+    // Focus command input
+    setTimeout(() => {
+      (this.shadowRoot?.getElementById("test-cmd-input") as HTMLInputElement)?.focus();
+    }, 50);
+  }
+
+  private closeTest(): void {
+    const chatView = this.shadowRoot?.getElementById("chat-view");
+    const settingsView = this.shadowRoot?.getElementById("settings-view");
+    const testView = this.shadowRoot?.getElementById("test-view");
+    if (!chatView || !settingsView || !testView) return;
+
+    testView.classList.add("hidden");
+    chatView.classList.remove("hidden");
+    this.focusInput();
   }
 
   private async openSettings(): Promise<void> {
@@ -169,27 +231,52 @@ export class InterfaceAIOverlay {
   private closeSettings(): void {
     const chatView = this.shadowRoot?.getElementById("chat-view");
     const settingsView = this.shadowRoot?.getElementById("settings-view");
-    if (!chatView || !settingsView) return;
+    const testView = this.shadowRoot?.getElementById("test-view");
+    if (!chatView || !settingsView || !testView) return;
 
     settingsView.classList.add("hidden");
+    testView.classList.add("hidden");
     chatView.classList.remove("hidden");
     this.focusInput();
   }
 
   public show(): void {
     this.container?.classList.remove("hidden");
+    this.persistVisibility(false);
     this.focusInput();
   }
 
   public hide(): void {
     this.container?.classList.add("hidden");
+    this.persistVisibility(true);
   }
 
   public toggle(): void {
     this.container?.classList.toggle("hidden");
-    if (!this.container?.classList.contains("hidden")) {
+    const hidden = !!this.container?.classList.contains("hidden");
+    this.persistVisibility(hidden);
+    if (!hidden) {
       this.focusInput();
     }
+  }
+
+  private restoreState(): void {
+    restoreMessages(this.shadowRoot).catch(() => {
+      // ignore restore failures
+    });
+
+    chrome.storage.local.get([this.visibilityStorageKey], (result) => {
+      const hidden = !!result?.[this.visibilityStorageKey];
+      if (hidden) {
+        this.container?.classList.add("hidden");
+      } else {
+        this.container?.classList.remove("hidden");
+      }
+    });
+  }
+
+  private persistVisibility(hidden: boolean): void {
+    chrome.storage.local.set({ [this.visibilityStorageKey]: hidden });
   }
 
   private focusInput(): void {

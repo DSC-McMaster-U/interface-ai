@@ -2,3 +2,13 @@
 # Note: defaultdict is from Python stdlib (collections), no install needed.
 flask==3.0.3
 pytest==8.3.4
+easyocr
+opencv-python
+pillow
+numpy
+torch
+torchvision
+transformers
+timm
+google-genai
+python-dotenv

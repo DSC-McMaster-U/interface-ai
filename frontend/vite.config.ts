@@ -20,6 +20,10 @@ export default defineConfig({
           src: "public/logo_128px.svg",
           dest: ".",
         },
+        {
+          src: "public/automation.js",
+          dest: ".",
+        },
       ],
     }),
   ],

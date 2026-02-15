@@ -368,6 +368,18 @@
         var msg;
         try { msg = JSON.parse(event.data); } catch (e) { return; }
 
+        if (msg.type === 'agent_log') {
+          try {
+            window.postMessage({
+              source: 'interface-ai',
+              type: 'AGENT_LOG',
+              message: msg.message || ''
+            }, '*');
+          } catch (e) {
+          }
+          return;
+        }
+
         // Screenshot is async — handle separately
         if (msg.action === 'screenshot') {
           console.log('[InterfaceAI] Command (CLI):', 'screenshot', msg.params || {});

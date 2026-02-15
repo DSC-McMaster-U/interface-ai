@@ -54,11 +54,10 @@
 
     .quick-actions {
       display: flex;
+      flex-wrap: wrap;
       gap: 6px;
       padding: 10px 16px;
-      overflow-x: auto;
     }
-    .quick-actions::-webkit-scrollbar { display: none; }
     .quick-btn {
       flex-shrink: 0;
       padding: 5px 10px;
@@ -157,6 +156,11 @@
     <button class="quick-btn" data-cmd="scroll top">top</button>
     <button class="quick-btn" data-cmd="scroll bottom">bottom</button>
     <button class="quick-btn" data-cmd="back">back</button>
+    <button class="quick-btn" data-prefill="click ">click</button>
+    <button class="quick-btn" data-prefill="fill ">fill</button>
+    <button class="quick-btn" data-prefill="goto ">goto</button>
+    <button class="quick-btn" data-cmd="result">result</button>
+    <button class="quick-btn" data-cmd="screenshot">screenshot</button>
   </div>
 
   <div class="log-area" id="log">
