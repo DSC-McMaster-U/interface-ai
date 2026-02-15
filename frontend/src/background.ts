@@ -199,6 +199,39 @@ chrome.runtime.onMessage.addListener(
       return true;
     }
 
+    // Test panel / automation: screenshot or forward commands to tab
+    const testMsg = message as { target?: string; action?: string; params?: Record<string, unknown> };
+    if (testMsg.action === "screenshot") {
+      const windowId = _sender.tab?.windowId ?? 0;
+      chrome.tabs.captureVisibleTab(windowId, { format: "png" }, (dataUrl) => {
+        if (chrome.runtime.lastError) {
+          sendResponse({
+            success: false,
+            error: chrome.runtime.lastError.message,
+          });
+        } else {
+          (sendResponse as (r: unknown) => void)({ success: true, dataUrl });
+        }
+      });
+      return true;
+    }
+    if (testMsg.target === "background" && testMsg.action) {
+      const tabId = _sender.tab?.id;
+      if (!tabId) {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          const t = tabs[0];
+          if (t?.id) {
+            chrome.tabs.sendMessage(t.id, { action: testMsg.action, params: testMsg.params || {} }, sendResponse);
+          } else {
+            sendResponse({ success: false, error: "No active tab" });
+          }
+        });
+      } else {
+        chrome.tabs.sendMessage(tabId, { action: testMsg.action, params: testMsg.params || {} }, sendResponse);
+      }
+      return true;
+    }
+
     return false;
   },
 );
@@ -230,7 +263,7 @@ async function toggleOverlay(tab: chrome.tabs.Tab): Promise<void> {
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ["content.js"],
+        files: ["content.js", "automation.js"],
       });
       // After injection, send the toggle message to show the overlay
       // Small delay to ensure content script is fully initialized

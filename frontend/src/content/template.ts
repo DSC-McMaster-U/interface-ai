@@ -19,6 +19,11 @@ export const OVERLAY_HTML = `
               <path d="M7.70833 18.3334L7.375 15.6667C7.19444 15.5972 7.02431 15.5139 6.86458 15.4167C6.70486 15.3195 6.54861 15.2153 6.39583 15.1042L3.91667 16.1459L1.625 12.1875L3.77083 10.5625C3.75694 10.4653 3.75 10.3715 3.75 10.2813V9.71877C3.75 9.62849 3.75694 9.53474 3.77083 9.43752L1.625 7.81252L3.91667 3.85419L6.39583 4.89585C6.54861 4.78474 6.70833 4.68058 6.875 4.58335C7.04167 4.48613 7.20833 4.4028 7.375 4.33335L7.70833 1.66669H12.2917L12.625 4.33335C12.8056 4.4028 12.9757 4.48613 13.1354 4.58335C13.2951 4.68058 13.4514 4.78474 13.6042 4.89585L16.0833 3.85419L18.375 7.81252L16.2292 9.43752C16.2431 9.53474 16.25 9.62849 16.25 9.71877V10.2813C16.25 10.3715 16.2361 10.4653 16.2083 10.5625L18.3542 12.1875L16.0625 16.1459L13.6042 15.1042C13.4514 15.2153 13.2917 15.3195 13.125 15.4167C12.9583 15.5139 12.7917 15.5972 12.625 15.6667L12.2917 18.3334H7.70833ZM10.0417 12.9167C10.8472 12.9167 11.5347 12.632 12.1042 12.0625C12.6736 11.4931 12.9583 10.8056 12.9583 10C12.9583 9.19447 12.6736 8.50697 12.1042 7.93752C11.5347 7.36808 10.8472 7.08335 10.0417 7.08335C9.22222 7.08335 8.53125 7.36808 7.96875 7.93752C7.40625 8.50697 7.125 9.19447 7.125 10C7.125 10.8056 7.40625 11.4931 7.96875 12.0625C8.53125 12.632 9.22222 12.9167 10.0417 12.9167Z"/>
             </svg>
           </button>
+          <button class="icon-btn" id="test-btn" title="Test (DOM automation)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+            </svg>
+          </button>
           <button class="icon-btn" id="close-btn" title="Close">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -52,6 +57,32 @@ export const OVERLAY_HTML = `
             </div>
             <span>Loading settings...</span>
           </div>
+        </div>
+      </div>
+      <div class="test-view hidden" id="test-view">
+        <div class="test-quick-actions">
+          <div class="test-status-dot disconnected" id="test-status-dot" title="Ready"></div>
+          <button class="test-quick-btn" data-cmd="status">status</button>
+          <button class="test-quick-btn" data-cmd="scroll down">scroll ↓</button>
+          <button class="test-quick-btn" data-cmd="scroll up">scroll ↑</button>
+          <button class="test-quick-btn" data-cmd="scroll top">top</button>
+          <button class="test-quick-btn" data-cmd="scroll bottom">bottom</button>
+          <button class="test-quick-btn" data-cmd="back">back</button>
+          <button class="test-quick-btn" data-prefill="click ">click</button>
+          <button class="test-quick-btn" data-prefill="fill ">fill</button>
+          <button class="test-quick-btn" data-prefill="goto ">goto</button>
+          <button class="test-quick-btn" data-cmd="result">result</button>
+          <button class="test-quick-btn" data-cmd="screenshot">screenshot</button>
+        </div>
+        <div class="test-log-area" id="test-log">
+          <div class="test-empty-state">
+            <span>⌨️</span>
+            Type a command below
+          </div>
+        </div>
+        <div class="test-input-bar">
+          <input type="text" id="test-cmd-input" placeholder="click 500 300 / fill email hi@..." />
+          <button class="test-run-btn" id="test-run-btn">Run</button>
         </div>
       </div>
     </div>

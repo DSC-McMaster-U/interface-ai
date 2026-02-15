@@ -7,28 +7,27 @@
     "default_title": "InterfaceAI - Click to activate",
     "default_icon": "logo_128px.svg"
   },
-  "icons": {
-    "128": "logo_128px.svg"
-  },
-  "permissions": ["activeTab", "scripting", "tabs"],
+  "icons": { "128": "logo_128px.svg" },
+  "permissions": ["activeTab", "scripting", "tabs", "storage"],
   "host_permissions": ["http://localhost:5000/*", "<all_urls>"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js", "automation.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "commands": {
     "toggle-overlay": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+Y",
-        "mac": "Command+Shift+Y"
-      },
+      "suggested_key": { "default": "Ctrl+Shift+Y", "mac": "Command+Shift+Y" },
       "description": "Toggle InterfaceAI overlay"
     },
     "open-settings": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+U",
-        "mac": "Command+Shift+U"
-      },
+      "suggested_key": { "default": "Ctrl+Shift+U", "mac": "Command+Shift+U" },
       "description": "Open InterfaceAI settings"
     }
   }

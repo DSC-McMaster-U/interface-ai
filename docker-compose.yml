@@ -3,6 +3,7 @@ services:
     build: ./backend
     ports:
       - "5000:5000"
+      - "7878:7878"
     volumes:
       - ./backend:/app
     environment:

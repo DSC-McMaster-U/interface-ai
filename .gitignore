@@ -4,3 +4,4 @@ __pycache__/
 .vscode/*
 .env
 vision-ai/tests/output-images/*
+*/venv

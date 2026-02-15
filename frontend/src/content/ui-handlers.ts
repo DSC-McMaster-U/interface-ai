@@ -4,6 +4,44 @@
 
 import type { ApiRequestMessage, ApiResponse } from "./types";
 
+type ChatMessage = {
+  text: string;
+  type: "user" | "assistant" | "error";
+};
+
+const CHAT_STORAGE_KEY = "interface_ai_chat_messages";
+
+function storageGet<T>(key: string): Promise<T | undefined> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([key], (result) => {
+      resolve(result?.[key] as T | undefined);
+    });
+  });
+}
+
+function storageSet(key: string, value: unknown): Promise<void> {
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ [key]: value }, () => resolve());
+  });
+}
+
+async function appendPersistedMessage(message: ChatMessage): Promise<void> {
+  const existing = (await storageGet<ChatMessage[]>(CHAT_STORAGE_KEY)) || [];
+  const next = [...existing, message].slice(-100);
+  await storageSet(CHAT_STORAGE_KEY, next);
+}
+
+export async function restoreMessages(shadowRoot: ShadowRoot | null): Promise<void> {
+  const container = shadowRoot?.getElementById("messages-container");
+  if (!container) return;
+
+  const existing = (await storageGet<ChatMessage[]>(CHAT_STORAGE_KEY)) || [];
+  container.innerHTML = "";
+  for (const msg of existing) {
+    addMessage(shadowRoot, msg.text, msg.type, false);
+  }
+}
+
 /**
  * Add a message to the chat container
  */
@@ -11,6 +49,7 @@ export function addMessage(
   shadowRoot: ShadowRoot | null,
   text: string,
   type: "user" | "assistant" | "error",
+  persist: boolean = true,
 ): void {
   const container = shadowRoot?.getElementById("messages-container");
   if (!container) return;
@@ -19,6 +58,12 @@ export function addMessage(
   messageEl.className = `message ${type}`;
   messageEl.textContent = text;
   container.appendChild(messageEl);
+
+  if (persist) {
+    appendPersistedMessage({ text, type }).catch(() => {
+      // ignore storage failures
+    });
+  }
 
   // Scroll to bottom
   container.scrollTop = container.scrollHeight;
@@ -182,22 +227,28 @@ export function setupInput(
 }
 
 /**
- * Setup close button and settings button
+ * Setup close button, settings button, and test button
  */
 export function setupButtons(
   shadowRoot: ShadowRoot | null,
   container: HTMLElement | null,
   onSettingsClick?: () => void,
+  onTestClick?: () => void,
+  onCloseClick?: () => void,
 ): void {
   const closeBtn = shadowRoot?.getElementById("close-btn");
   closeBtn?.addEventListener("click", () => {
     container?.classList.add("hidden");
+    if (onCloseClick) onCloseClick();
   });
 
   const settingsBtn = shadowRoot?.getElementById("settings-btn");
   settingsBtn?.addEventListener("click", () => {
-    if (onSettingsClick) {
-      onSettingsClick();
-    }
+    if (onSettingsClick) onSettingsClick();
+  });
+
+  const testBtn = shadowRoot?.getElementById("test-btn");
+  testBtn?.addEventListener("click", () => {
+    if (onTestClick) onTestClick();
   });
 }
