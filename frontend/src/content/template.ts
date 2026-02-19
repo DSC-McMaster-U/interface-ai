@@ -4,22 +4,26 @@
 export const OVERLAY_HTML = `
   <div class="interface-ai-container hidden" id="interface-ai-main">
     <div class="glass-panel">
+      <!-- Header -->
       <div class="header" id="drag-handle">
-        <div class="header-title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <path d="M12 16v-4"></path>
-            <path d="M12 8h.01"></path>
-          </svg>
-          InterfaceAI
+        <div class="header-left">
+          <div class="header-logo">
+            <img src="{{LOGO_URL}}" alt="InterfaceAI Logo">
+          </div>
+          <div class="header-title">
+            InterfaceAI
+          </div>
         </div>
         <div class="header-actions">
           <button class="icon-btn" id="settings-btn" title="Settings">
-            <svg viewBox="0 0 20 20" fill="currentColor">
-              <path d="M7.70833 18.3334L7.375 15.6667C7.19444 15.5972 7.02431 15.5139 6.86458 15.4167C6.70486 15.3195 6.54861 15.2153 6.39583 15.1042L3.91667 16.1459L1.625 12.1875L3.77083 10.5625C3.75694 10.4653 3.75 10.3715 3.75 10.2813V9.71877C3.75 9.62849 3.75694 9.53474 3.77083 9.43752L1.625 7.81252L3.91667 3.85419L6.39583 4.89585C6.54861 4.78474 6.70833 4.68058 6.875 4.58335C7.04167 4.48613 7.20833 4.4028 7.375 4.33335L7.70833 1.66669H12.2917L12.625 4.33335C12.8056 4.4028 12.9757 4.48613 13.1354 4.58335C13.2951 4.68058 13.4514 4.78474 13.6042 4.89585L16.0833 3.85419L18.375 7.81252L16.2292 9.43752C16.2431 9.53474 16.25 9.62849 16.25 9.71877V10.2813C16.25 10.3715 16.2361 10.4653 16.2083 10.5625L18.3542 12.1875L16.0625 16.1459L13.6042 15.1042C13.4514 15.2153 13.2917 15.3195 13.125 15.4167C12.9583 15.5139 12.7917 15.5972 12.625 15.6667L12.2917 18.3334H7.70833ZM10.0417 12.9167C10.8472 12.9167 11.5347 12.632 12.1042 12.0625C12.6736 11.4931 12.9583 10.8056 12.9583 10C12.9583 9.19447 12.6736 8.50697 12.1042 7.93752C11.5347 7.36808 10.8472 7.08335 10.0417 7.08335C9.22222 7.08335 8.53125 7.36808 7.96875 7.93752C7.40625 8.50697 7.125 9.19447 7.125 10C7.125 10.8056 7.40625 11.4931 7.96875 12.0625C8.53125 12.632 9.22222 12.9167 10.0417 12.9167Z"/>
+            <!-- Settings Icon (Gear) -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
             </svg>
           </button>
           <button class="icon-btn" id="close-btn" title="Close">
+            <!-- Close Icon (X) -->
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -27,37 +31,50 @@ export const OVERLAY_HTML = `
           </button>
         </div>
       </div>
+
+      <!-- Chat View -->
       <div class="chat-view" id="chat-view">
         <div class="content" id="messages-container">
           <div class="message assistant">
-            👋 Hi! I'm InterfaceAI. How can I help you today?
+            Hello! I'm InterfaceAI. How can I assist you?
           </div>
         </div>
         <div class="input-area">
-          <input type="text" id="message-input" placeholder="Type your message..." />
-          <button class="send-btn" id="send-btn">Send</button>
+          <div class="input-wrapper">
+            <input type="text" id="message-input" placeholder="Ask anything..." />
+            <button class="send-btn" id="send-btn" title="Send">
+               <!-- Arrow Up Icon -->
+               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5"></line>
+                <polyline points="5 12 12 5 19 12"></polyline>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
+
+      <!-- Settings View -->
       <div class="settings-view hidden" id="settings-view">
-        <div class="settings-header">
-          <h2>Settings</h2>
-          <p class="settings-subtitle">Click the gear icon to close</p>
+        <div class="settings-header" style="padding: 20px; padding-bottom: 10px;">
+          <h2 style="font-size: 18px; font-weight: 600;">Settings</h2>
         </div>
-        <div class="settings-content" id="settings-content">
+        <div class="content" id="settings-content" style="padding-top: 0;">
           <div class="settings-loading">
             <div class="loading-dots">
               <span></span>
               <span></span>
               <span></span>
             </div>
-            <span>Loading settings...</span>
+            <span style="font-size: 13px; margin-top: 8px; display: block;">Loading settings...</span>
           </div>
         </div>
       </div>
     </div>
-    <div class="resize-handle" id="resize-handle" title="Drag to resize">
+
+    <!-- Resize Handle -->
+    <div class="resize-handle" id="resize-handle">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 21L12 21M21 21L21 12M21 21L14 14"></path>
+        <path d="M22 22L12 22M22 22L22 12M22 22L15 15"></path>
       </svg>
     </div>
   </div>
