@@ -41,6 +41,7 @@ By combining intent recognition, vision-based action execution, and contextual a
 |  | [**Mohit Gedela**](https://github.com/MohitGedela) <br/><i>Vision AI</i> | Python · Java · JavaScript | Vision AI Development |
 |  | [**Alex Melnbardis**](https://github.com/amelnbardis2004) <br/><i>AI</i> | Python · PyTorch · Playwright · LangGraph | AI Agents + Vision AI |
 |  | [**David Olejniczak**](https://github.com/davidolejniczak) <br/><i>CI/CD + Cloud</i> | CGP · Docker · Github Actions | CI/CD |
+|  | [**Anhad Chawla**](https://github.com/AsmpSa00) <br/><i>AI Specialist + Solution Architect</i> | Python · LangGraph · GCP · BigTable | Agentic Workflows |
 |  |  |  |  |
 |  |  |  |  |
 |  |  |  |  |
