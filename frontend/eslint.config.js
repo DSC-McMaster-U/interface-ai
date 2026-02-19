@@ -12,5 +12,5 @@ export default [
       },
     },
   },
-  globalIgnores(["**/build/"])
+  globalIgnores(["**/build/"]),
 ];

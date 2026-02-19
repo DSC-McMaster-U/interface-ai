@@ -10,15 +10,8 @@
   "icons": {
     "128": "logo_128.png"
   },
-  "permissions": [
-    "activeTab",
-    "scripting",
-    "tabs"
-  ],
-  "host_permissions": [
-    "http://localhost:5000/*",
-    "<all_urls>"
-  ],
+  "permissions": ["activeTab", "scripting", "tabs"],
+  "host_permissions": ["http://localhost:5000/*", "<all_urls>"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -41,12 +34,8 @@
   },
   "web_accessible_resources": [
     {
-      "resources": [
-        "logo_128.png"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
+      "resources": ["logo_128.png"],
+      "matches": ["<all_urls>"]
     }
   ]
 }

@@ -2,7 +2,7 @@
  * Styles for the glassmorphic overlay
  * Injected into Shadow DOM for style isolation
  */
-  export const OVERLAY_STYLES = `
+export const OVERLAY_STYLES = `
   * {
     margin: 0;
     padding: 0;
