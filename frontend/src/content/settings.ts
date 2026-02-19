@@ -38,32 +38,48 @@ export const SETTINGS_STYLES = `
   }
 
   .settings-header {
-    padding: 16px 20px;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
-    border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+    padding: 16px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     display: flex;
     flex-direction: column;
     gap: 4px;
+    background: rgba(255, 255, 255, 0.02);
   }
 
   .settings-header h2 {
     font-size: 18px;
-    font-weight: 600;
+    font-weight: 500;
     margin: 0;
-    color: rgba(99, 102, 241, 0.9);
+    color: var(--text-primary);
   }
 
   .settings-subtitle {
-    font-size: 11px;
-    color: rgba(0, 0, 0, 0.5);
+    font-size: 12px;
+    color: var(--text-secondary);
     margin: 0;
-    font-style: italic;
   }
 
   .settings-content {
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
+    padding: 20px;
+  }
+
+  .settings-content::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .settings-content::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .settings-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+  }
+  
+  .settings-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
   }
 
   .settings-loading {
@@ -72,89 +88,100 @@ export const SETTINGS_STYLES = `
     justify-content: center;
     gap: 8px;
     padding: 40px 20px;
-    color: rgba(99, 102, 241, 0.8);
+    color: var(--text-secondary);
     font-size: 13px;
   }
 
   .settings-section {
-    margin-bottom: 24px;
+    margin-top: 12px;
+    margin-bottom: 12px;
   }
 
   .settings-section h3 {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     margin-bottom: 12px;
-    color: rgba(0, 0, 0, 0.8);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
 
   .settings-field {
     margin-bottom: 12px;
-    padding: 10px 12px;
-    background: rgba(255, 255, 255, 0.7);
-    border: 1px solid rgba(0, 0, 0, 0.1);
-    border-radius: 8px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .settings-field:hover {
-    background: rgba(255, 255, 255, 0.9);
-    border-color: rgba(99, 102, 241, 0.3);
-    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.1);
   }
 
   .settings-field-label {
     font-size: 11px;
-    font-weight: 600;
-    color: rgba(0, 0, 0, 0.6);
+    font-weight: 500;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 4px;
   }
 
   .settings-field-value {
-    font-size: 13px;
-    color: rgba(0, 0, 0, 0.9);
+    font-size: 14px;
+    color: var(--text-primary);
   }
 
   .settings-field-value.empty {
-    color: rgba(0, 0, 0, 0.4);
+    color: var(--text-secondary);
     font-style: italic;
+    opacity: 0.7;
   }
 
   .interests-container {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 8px;
     margin-top: 8px;
   }
 
   .interest-tag {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    background: rgba(99, 102, 241, 0.15);
-    border: 1px solid rgba(99, 102, 241, 0.3);
-    border-radius: 12px;
-    font-size: 12px;
-    color: rgba(99, 102, 241, 0.9);
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    font-size: 13px;
+    color: var(--text-primary);
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .interest-tag:hover {
-    background: rgba(99, 102, 241, 0.25);
-    border-color: rgba(99, 102, 241, 0.5);
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.2);
   }
 
   .interest-tag-remove {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
     margin-left: 2px;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+  }
+
+  .interest-tag:hover .interest-tag-remove {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.2);
   }
 
   .interest-tag-remove svg {
@@ -166,24 +193,25 @@ export const SETTINGS_STYLES = `
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    background: rgba(99, 102, 241, 0.15);
-    border: 1px solid rgba(99, 102, 241, 0.3);
-    border-radius: 12px;
+    width: 30px;
+    height: 30px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
     cursor: pointer;
     transition: all 0.2s ease;
+    color: var(--text-primary);
   }
 
   .add-interest-btn:hover {
-    background: rgba(99, 102, 241, 0.25);
-    border-color: rgba(99, 102, 241, 0.5);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
   }
 
   .add-interest-btn svg {
-    width: 14px;
-    height: 14px;
-    color: rgba(99, 102, 241, 0.9);
+    width: 16px;
+    height: 16px;
   }
 `;
 
