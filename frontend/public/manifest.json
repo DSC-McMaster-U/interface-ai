@@ -38,5 +38,15 @@
       },
       "description": "Open InterfaceAI settings"
     }
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "logo_128.png"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
 }

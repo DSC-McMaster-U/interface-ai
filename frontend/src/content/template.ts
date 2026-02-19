@@ -6,8 +6,13 @@ export const OVERLAY_HTML = `
     <div class="glass-panel">
       <!-- Header -->
       <div class="header" id="drag-handle">
-        <div class="header-title">
-          InterfaceAI
+        <div class="header-left">
+          <div class="header-logo">
+            <img src="{{LOGO_URL}}" alt="InterfaceAI Logo">
+          </div>
+          <div class="header-title">
+            InterfaceAI
+          </div>
         </div>
         <div class="header-actions">
           <button class="icon-btn" id="settings-btn" title="Settings">

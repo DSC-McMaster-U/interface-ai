@@ -69,6 +69,12 @@
     cursor: grabbing;
   }
 
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   .header-title {
     display: flex;
     align-items: center;
@@ -78,6 +84,16 @@
     color: var(--text-primary);
     opacity: 0.9;
     letter-spacing: 0.2px;
+  }
+
+  .header-logo {
+    display: flex;
+    align-items: center;
+  }
+
+  .header-logo img {
+    width: 22px;
+    height: 22px;
   }
 
   .header-actions {

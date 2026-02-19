@@ -57,7 +57,9 @@ export class InterfaceAIOverlay {
 
     // Inject HTML into Shadow DOM
     const wrapper = document.createElement("div");
-    wrapper.innerHTML = OVERLAY_HTML;
+    // Replace logo placeholder with actual runtime URL
+    const logoUrl = chrome.runtime.getURL("logo_128.png");
+    wrapper.innerHTML = OVERLAY_HTML.replace("{{LOGO_URL}}", logoUrl);
     this.shadowRoot.appendChild(wrapper);
 
     // Get reference to main container
