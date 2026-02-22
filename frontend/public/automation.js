@@ -127,6 +127,24 @@
     return { success: true };
   }
 
+  function pressKey(key) {
+    var active = document.activeElement || document.body;
+    active.dispatchEvent(new KeyboardEvent('keydown', { key: key, bubbles: true }));
+    active.dispatchEvent(new KeyboardEvent('keyup',   { key: key, bubbles: true }));
+    return { success: true };
+  }
+
+  function typeText(text) {
+    var active = document.activeElement;
+    if (!active || active === document.body) return { success: false, error: 'No focused input' };
+
+    var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    if (setter) setter.call(active, (active.value || '') + text);
+    else active.value = (active.value || '') + text;
+    active.dispatchEvent(new Event('input', { bubbles: true }));
+    return { success: true };
+  }
+
   // ── Page Status ──
 
   function getPageStatus() {
@@ -188,6 +206,8 @@
         case 'fillInput':             return fillInput(params.identifier, params.value);
         case 'clickFirstSearchResult':return clickFirstSearchResult();
         case 'pressEnter':            return pressEnter();
+        case 'pressKey':              return pressKey(params.key);
+        case 'typeText':              return typeText(params.text);
         case 'getPageStatus':
         case 'status':                return getPageStatus();
         case 'goto':                  return gotoUrl(params.url);

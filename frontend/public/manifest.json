@@ -10,12 +10,19 @@
   "icons": {
     "128": "logo_128px.svg"
   },
-  "permissions": ["activeTab", "scripting", "tabs"],
+  "permissions": ["activeTab", "scripting", "tabs", "downloads"],
   "host_permissions": ["http://localhost:5000/*", "<all_urls>"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["automation.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "commands": {
     "toggle-overlay": {
       "suggested_key": {
