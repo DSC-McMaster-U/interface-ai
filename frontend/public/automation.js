@@ -3,7 +3,7 @@
 // Runs inside the browser tab.
 // Accepts commands from:
 //   1. Terminal CLI via WebSocket (ws://localhost:7878)
-//   2. Popup via chrome.runtime.onMessage
+//   2. Frontend UI via chrome.runtime.onMessage
 // ============================================
 
 (function () {
@@ -221,7 +221,7 @@
     }
   }
 
-  // ── Listener 1: Chrome Messages (popup / background.js) ──
+  // ── Listener 1: Chrome Messages (frontend / background.js) ──
 
   chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     if (message.action === 'screenshot') {

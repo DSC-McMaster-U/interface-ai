@@ -5,6 +5,7 @@
 
 // URL for the backend API
 const BACKEND_API = "http://localhost:5000";
+const SCREENSHOT_FOLDER = "InterfaceAI";
 
 /**
  * Message types for communication with content scripts
@@ -28,10 +29,35 @@ interface UpdateUserSettingsMessage {
   payload: UserSettings;
 }
 
+interface AutomationCommandMessage {
+  target: "background";
+  action: string;
+  params?: Record<string, unknown>;
+  filename?: string;
+}
+
+interface ContentScriptScreenshotMessage {
+  action: "screenshot";
+  filename?: string;
+}
+
 interface ApiResponse {
   success: boolean;
   data?: unknown;
   error?: string;
+}
+
+interface ScreenshotResponse {
+  success: boolean;
+  downloadId?: number;
+  filename?: string;
+  dataUrl?: string;
+  error?: string;
+}
+
+interface AutomationResponse {
+  success: boolean;
+  [key: string]: unknown;
 }
 
 interface UserSettings {
@@ -139,6 +165,159 @@ async function updateUserSettings(
 }
 
 /**
+ * Take a screenshot of the current tab and save it to the downloads folder
+ */
+function takeScreenshot(
+  sendResponse: (response: ScreenshotResponse) => void,
+  options: { filename?: string } = {},
+): void {
+  chrome.tabs.captureVisibleTab(null as unknown as number, { format: "png", quality: 100 }, (dataUrl) => {
+    if (chrome.runtime.lastError) {
+      sendResponse({ success: false, error: chrome.runtime.lastError.message });
+      return;
+    }
+    if (!dataUrl) {
+      sendResponse({ success: false, error: "captureVisibleTab returned empty result" });
+      return;
+    }
+
+    const filename =
+      options.filename ??
+      `interfaceai_${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
+    const fullPath = `${SCREENSHOT_FOLDER}/${filename}`;
+
+    chrome.downloads.download(
+      { url: dataUrl, filename: fullPath, saveAs: false, conflictAction: "uniquify" },
+      (downloadId) => {
+        if (chrome.runtime.lastError) {
+          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+          return;
+        }
+        sendResponse({ success: true, downloadId, filename: fullPath, dataUrl });
+      },
+    );
+  });
+}
+
+/**
+ * Commands that can run from the background without a content script
+ * Used as a fallback for restricted pages like chrome://
+ */
+function backgroundExecute(
+  tabId: number,
+  action: string,
+  params: Record<string, unknown>,
+  sendResponse: (response: AutomationResponse) => void,
+): boolean {
+  switch (action) {
+    case "ping":
+      sendResponse({ success: true, pong: true });
+      return true;
+
+    case "screenshot":
+      takeScreenshot(sendResponse as (r: ScreenshotResponse) => void, params as { filename?: string });
+      return true;
+
+    case "goto":
+      if (!params.url) {
+        sendResponse({ success: false, error: "No URL provided" });
+        return true;
+      }
+      chrome.tabs.update(tabId, { url: params.url as string }, () => {
+        if (chrome.runtime.lastError) {
+          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+        } else {
+          sendResponse({ success: true, url: params.url });
+        }
+      });
+      return true;
+
+    case "goBack":
+      chrome.tabs.goBack(tabId, () => {
+        sendResponse(
+          chrome.runtime.lastError
+            ? { success: false, error: chrome.runtime.lastError.message }
+            : { success: true },
+        );
+      });
+      return true;
+
+    case "goForward":
+      chrome.tabs.goForward(tabId, () => {
+        sendResponse(
+          chrome.runtime.lastError
+            ? { success: false, error: chrome.runtime.lastError.message }
+            : { success: true },
+        );
+      });
+      return true;
+
+    case "getPageStatus":
+      chrome.tabs.get(tabId, (tab) => {
+        if (chrome.runtime.lastError) {
+          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+          return;
+        }
+        sendResponse({
+          success: true,
+          title: tab.title ?? "",
+          url: tab.url ?? "",
+          note: "Limited info — content script cannot run on this page",
+          elements: [],
+        });
+      });
+      return true;
+
+    default:
+      return false;
+  }
+}
+
+/**
+ * Send command to content script, with retry and fallback to backgroundExecute
+ */
+function sendToTab(
+  tabId: number,
+  action: string,
+  params: Record<string, unknown>,
+  sendResponse: (response: AutomationResponse) => void,
+  retries = 2,
+): void {
+  chrome.tabs.sendMessage(tabId, { action, params }, (result) => {
+    if (chrome.runtime.lastError) {
+      if (retries > 0) {
+        chrome.scripting.executeScript(
+          { target: { tabId }, files: ["automation.js"] },
+          () => {
+            if (chrome.runtime.lastError) {
+              // Content script injection failed (restricted page).
+              // Try handling the command from background instead.
+              const handled = backgroundExecute(tabId, action, params, sendResponse);
+              if (!handled) {
+                sendResponse({
+                  success: false,
+                  error: "Cannot run this command on this page (chrome:// pages are restricted)",
+                });
+              }
+              return;
+            }
+            setTimeout(() => sendToTab(tabId, action, params, sendResponse, retries - 1), 500);
+          },
+        );
+      } else {
+        // Final retry exhausted — try background fallback
+        const handled = backgroundExecute(tabId, action, params, sendResponse);
+        if (!handled) {
+          sendResponse({ success: false, error: chrome.runtime.lastError?.message ?? "Unknown error" });
+        }
+      }
+    } else {
+      sendResponse(result as AutomationResponse);
+    }
+  });
+}
+
+/**
  * Listen for messages from content scripts
  */
 chrome.runtime.onMessage.addListener(
@@ -147,9 +326,11 @@ chrome.runtime.onMessage.addListener(
       | ApiRequestMessage
       | GetUserSettingsMessage
       | UpdateUserSettingsMessage
-      | { type: string },
-    _sender: chrome.runtime.MessageSender,
-    sendResponse: (response: ApiResponse) => void,
+      | AutomationCommandMessage
+      | ContentScriptScreenshotMessage
+      | { type?: string; action?: string; target?: string },
+    sender: chrome.runtime.MessageSender,
+    sendResponse: (response: unknown) => void,
   ) => {
     console.log("[InterfaceAI Background] Received message:", message.type);
 
@@ -199,7 +380,36 @@ chrome.runtime.onMessage.addListener(
       return true;
     }
 
-    return false;
+    // Handle screenshot requests from content script (CLI path)
+    const actionMsg = message as ContentScriptScreenshotMessage;
+    if (actionMsg.action === "screenshot" && sender.tab) {
+      takeScreenshot(sendResponse as (r: ScreenshotResponse) => void, { filename: actionMsg.filename });
+      return true;
+    }
+
+    // Handle automation commands from the frontend UI
+    const cmdMsg = message as AutomationCommandMessage;
+    if (cmdMsg.target !== "background") return false;
+
+    if (cmdMsg.action === "screenshot") {
+      takeScreenshot(sendResponse as (r: ScreenshotResponse) => void, { filename: cmdMsg.filename });
+      return true;
+    }
+
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (!tabs?.[0]?.id) {
+        sendResponse({ success: false, error: "No active tab found" });
+        return;
+      }
+      sendToTab(
+        tabs[0].id,
+        cmdMsg.action,
+        (cmdMsg.params ?? {}) as Record<string, unknown>,
+        sendResponse as (r: AutomationResponse) => void,
+      );
+    });
+
+    return true;
   },
 );
 
@@ -281,3 +491,5 @@ chrome.commands?.onCommand?.addListener(async (command) => {
     }
   }
 });
+
+console.log("[InterfaceAI] Background service worker ready");
