@@ -30,6 +30,7 @@ interface UpdateUserSettingsMessage {
 }
 
 interface AutomationCommandMessage {
+  type?: never
   target: "background";
   action: string;
   params?: Record<string, unknown>;
@@ -37,6 +38,7 @@ interface AutomationCommandMessage {
 }
 
 interface ContentScriptScreenshotMessage {
+  type?: never
   action: "screenshot";
   filename?: string;
 }
@@ -491,5 +493,3 @@ chrome.commands?.onCommand?.addListener(async (command) => {
     }
   }
 });
-
-console.log("[InterfaceAI] Background service worker ready");

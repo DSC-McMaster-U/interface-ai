@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "description": "Minimal Chrome extension frontend for InterfaceAI",
   "action": {
-    "default_title": "InterfaceAI - Click to activate"
+    "default_title": "InterfaceAI - Click to activate",
+    "default_popup": "popup.html"
   },
   "permissions": ["activeTab", "scripting", "tabs", "downloads"],
   "host_permissions": ["http://localhost:5000/*", "<all_urls>"],
