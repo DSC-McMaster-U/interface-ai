@@ -11,16 +11,7 @@ export default defineConfig({
     }),
     tailwindcss(),
     viteStaticCopy({
-      targets: [
-        {
-          src: "public/manifest.json",
-          dest: ".",
-        },
-        {
-          src: "public/logo_128px.svg",
-          dest: ".",
-        },
-      ],
+      targets: [],
     }),
   ],
   build: {
