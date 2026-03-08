@@ -258,6 +258,115 @@ export function typeText(text: string): ActionResult {
   return { success: false, error: "No active input element to type into" };
 }
 
+export function selectOption(identifier: string, value: string): ActionResult {
+  const lower = identifier.toLowerCase();
+
+  let select: HTMLSelectElement | null =
+    document.querySelector<HTMLSelectElement>(
+      `select[name="${identifier}" i]`,
+    ) ||
+    document.querySelector<HTMLSelectElement>(`#${CSS.escape(identifier)}`) ||
+    document.querySelector<HTMLSelectElement>(
+      `select[aria-label*="${identifier}" i]`,
+    );
+
+  if (!select) {
+    for (const label of document.querySelectorAll("label")) {
+      if (label.textContent?.toLowerCase().includes(lower)) {
+        const forAttr = label.getAttribute("for");
+        select = forAttr
+          ? (document.getElementById(forAttr) as HTMLSelectElement | null)
+          : label.querySelector("select");
+        if (select) break;
+      }
+    }
+  }
+
+  if (!select) {
+    return {
+      success: false,
+      error: `No dropdown found matching: "${identifier}"`,
+    };
+  }
+
+  // Try matching by option value first, then by option text
+  const valueLower = value.toLowerCase();
+  let matched = false;
+  for (const opt of select.options) {
+    if (
+      opt.value.toLowerCase() === valueLower ||
+      opt.text.toLowerCase().includes(valueLower)
+    ) {
+      select.value = opt.value;
+      matched = true;
+      break;
+    }
+  }
+
+  if (!matched) {
+    const available = Array.from(select.options)
+      .map((o) => o.text.trim())
+      .join(", ");
+    return {
+      success: false,
+      error: `No option matching "${value}". Available: ${available}`,
+    };
+  }
+
+  select.dispatchEvent(new Event("input", { bubbles: true }));
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+  return {
+    success: true,
+    name: select.name || select.id,
+    selected: select.options[select.selectedIndex]?.text,
+  };
+}
+
+export function clickFileInput(identifier: string): ActionResult {
+  const lower = identifier.toLowerCase();
+
+  let input: HTMLInputElement | null =
+    document.querySelector<HTMLInputElement>(
+      `input[type="file"][name="${identifier}" i]`,
+    ) ||
+    document.querySelector<HTMLInputElement>(
+      `input[type="file"]#${CSS.escape(identifier)}`,
+    ) ||
+    document.querySelector<HTMLInputElement>(
+      `input[type="file"][aria-label*="${identifier}" i]`,
+    );
+
+  if (!input) {
+    for (const label of document.querySelectorAll("label")) {
+      if (label.textContent?.toLowerCase().includes(lower)) {
+        const forAttr = label.getAttribute("for");
+        const candidate = forAttr
+          ? (document.getElementById(forAttr) as HTMLInputElement | null)
+          : label.querySelector<HTMLInputElement>('input[type="file"]');
+        if (candidate?.type === "file") {
+          input = candidate;
+          break;
+        }
+      }
+    }
+  }
+
+  // Fall back to any file input on the page
+  if (!input) {
+    input = document.querySelector<HTMLInputElement>('input[type="file"]');
+  }
+
+  if (!input) {
+    return {
+      success: false,
+      error: `No file input found matching: "${identifier}"`,
+    };
+  }
+
+  input.click();
+  return { success: true, name: input.name || input.id || "file input" };
+}
+
 // -------------------- PAGE STATUS --------------------
 
 export interface PageStatus {
@@ -345,6 +454,8 @@ export type ActionType =
   | { type: "pressEnter" }
   | { type: "pressEnterOn"; identifier: string }
   | { type: "typeText"; text: string }
+  | { type: "selectOption"; identifier: string; value: string }
+  | { type: "clickFileInput"; identifier: string }
   | { type: "getPageStatus" };
 
 export function executeAction(action: ActionType): ActionResult | PageStatus {
@@ -371,6 +482,10 @@ export function executeAction(action: ActionType): ActionResult | PageStatus {
       return pressEnterOn(action.identifier);
     case "typeText":
       return typeText(action.text);
+    case "selectOption":
+      return selectOption(action.identifier, action.value);
+    case "clickFileInput":
+      return clickFileInput(action.identifier);
     case "getPageStatus":
       return getPageStatus();
     default:
@@ -402,6 +517,10 @@ export function describeAction(action: ActionType): string {
       return `Press Enter on "${action.identifier}"`;
     case "typeText":
       return `Type "${action.text}"`;
+    case "selectOption":
+      return `Select "${action.value}" in "${action.identifier}"`;
+    case "clickFileInput":
+      return `Open file picker for "${action.identifier}"`;
     case "getPageStatus":
       return "Get page status";
     default:

@@ -97,6 +97,8 @@ const HELP_TEXT = `Available commands:
 /scroll bottom           — scroll to bottom
 /goto <url>              — navigate to URL
 /coord <x> <y>           — click at screen coordinates
+/select <field> <option> — choose a dropdown option by text
+/upload <field>          — open the file picker for a file input
 /result                  — click first search result
 /status                  — show page info
 /screenshot              — take a screenshot of the current page
@@ -118,6 +120,8 @@ import {
   pressEnter,
   pressEnterOn,
   typeText,
+  selectOption,
+  clickFileInput,
 } from "./actions";
 import type { PageStatus } from "./actions";
 
@@ -273,6 +277,26 @@ async function handleCommand(
 
     case "result": {
       report(clickFirstSearchResult(), "Click first search result");
+      return true;
+    }
+
+    case "select": {
+      if (!argParts[0] || argParts.length < 2) {
+        fail("Usage: /select <field> <option>");
+        return true;
+      }
+      const field = argParts[0];
+      const option = argParts.slice(1).join(" ");
+      report(selectOption(field, option), `Select "${option}" in "${field}"`);
+      return true;
+    }
+
+    case "upload": {
+      if (!argParts[0]) {
+        fail("Usage: /upload <field>");
+        return true;
+      }
+      report(clickFileInput(args), `Open file picker for "${args}"`);
       return true;
     }
 
