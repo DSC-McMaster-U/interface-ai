@@ -42,10 +42,7 @@ function addActionMessage(
   container.scrollTop = container.scrollHeight;
 }
 
-function addImageMessage(
-  shadowRoot: ShadowRoot | null,
-  dataUrl: string,
-): void {
+function addImageMessage(shadowRoot: ShadowRoot | null, dataUrl: string): void {
   const container = shadowRoot?.getElementById("messages-container");
   if (!container) return;
 
@@ -281,8 +278,12 @@ async function handleCommand(
 
     case "screenshot": {
       addMsg("Taking screenshot...", "assistant");
-      const response = await new Promise<{ success: boolean; data?: string; error?: string }>(
-        (resolve) => chrome.runtime.sendMessage({ type: "TAKE_SCREENSHOT" }, resolve),
+      const response = await new Promise<{
+        success: boolean;
+        data?: string;
+        error?: string;
+      }>((resolve) =>
+        chrome.runtime.sendMessage({ type: "TAKE_SCREENSHOT" }, resolve),
       );
       if (response?.success && response.data) {
         addImageMessage(shadowRoot, response.data);
