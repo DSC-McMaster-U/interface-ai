@@ -27,6 +27,8 @@ class AgentSession:
         self._thread: threading.Thread | None = None
         self._goal: str = ""
         self._require_approval: bool = True
+        self._queued_goal: str | None = None
+        self._restart_watcher_active: bool = False
 
     def is_running(self) -> bool:
         return bool(self._thread and self._thread.is_alive())
@@ -36,17 +38,53 @@ class AgentSession:
 
     def set_require_approval(self, enabled: bool) -> None:
         self._require_approval = bool(enabled)
+        # If approvals are disabled while a tool is pending, auto-approve it.
+        if not self._require_approval and self._pending_action is not None:
+            self._approval_decision = "YES"
+            self._approval_event.set()
+            self._emit("Approval disabled: auto-approving pending tool call.")
 
     def get_require_approval(self) -> bool:
         return self._require_approval
 
-    def start(self, goal: str) -> None:
+    def start(self, goal: str, *, restart_if_running: bool = False) -> None:
+        old_thread: threading.Thread | None = None
+        next_goal = (goal or "").strip()
+        if not next_goal:
+            self._emit("Missing goal text.")
+            return
+
+        with self._lock:
+            if self.is_running():
+                if not restart_if_running:
+                    self._emit("An agent session is already running. Type STOP to cancel.")
+                    return
+                self._emit("Stopping current session and starting new goal...")
+                self.stop()
+                old_thread = self._thread
+
+        if old_thread:
+            old_thread.join(timeout=5)
+            if old_thread.is_alive():
+                with self._lock:
+                    self._queued_goal = next_goal
+                    if not self._restart_watcher_active:
+                        self._restart_watcher_active = True
+                        watcher = threading.Thread(
+                            target=self._wait_and_start_queued_goal,
+                            args=(old_thread,),
+                            daemon=True,
+                        )
+                        watcher.start()
+                self._emit("Current session is still stopping. New goal queued and will auto-start.")
+                return
+
         with self._lock:
             if self.is_running():
                 self._emit("An agent session is already running. Type STOP to cancel.")
                 return
 
-            self._goal = (goal or "").strip()
+            self._goal = next_goal
             self._pending_action = None
             self._approval_decision = None
             self._feedback = None
@@ -55,6 +93,17 @@ class AgentSession:
 
             self._thread = threading.Thread(target=self._run, daemon=True)
             self._thread.start()
+
+    def _wait_and_start_queued_goal(self, old_thread: threading.Thread) -> None:
+        old_thread.join(timeout=60)
+        with self._lock:
+            self._restart_watcher_active = False
+            queued = self._queued_goal
+            self._queued_goal = None
+
+        if queued and not self.is_running():
+            self._emit(f"Starting queued goal: {queued}")
+            self.start(queued, restart_if_running=False)
 
     def stop(self) -> None:
         self._stop.set()
@@ -128,6 +177,12 @@ class AgentSession:
             return {"success": False, "error": "user_rejected", "feedback": self._feedback}
 
         result = send_command_sync(action, payload)
+        if not result.get("success", False):
+            err = result.get("error", "unknown error")
+            result["agent_feedback"] = (
+                f"Tool '{action}' failed with error '{err}'. "
+                "Choose a different action or different parameters."
+            )
         try:
             compact = json.dumps(result, ensure_ascii=True)
         except Exception:
@@ -139,25 +194,27 @@ class AgentSession:
         return result
 
     def _run(self) -> None:
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            self._emit("Missing GEMINI_API_KEY env var.")
+        try:
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                self._emit("Missing GEMINI_API_KEY env var.")
+                return
+
+            self._emit(f"Agent started. Goal: {self._goal}")
+            max_steps = 80
+
+            run_architecture_1(
+                api_key=api_key,
+                goal=self._goal,
+                max_steps=max_steps,
+                emit=self._emit,
+                approved_send=self._approved_send,
+                stop_event=self._stop,
+            )
+        except Exception as exc:
+            self._emit(f"Agent crashed: {type(exc).__name__}: {exc}")
+        finally:
             self._out.put({"done": True})
-            return
-
-        self._emit(f"Agent started. Goal: {self._goal}")
-        max_steps = 20
-
-        run_architecture_1(
-            api_key=api_key,
-            goal=self._goal,
-            max_steps=max_steps,
-            emit=self._emit,
-            approved_send=self._approved_send,
-            stop_event=self._stop,
-        )
-
-        self._out.put({"done": True})
 
 
 session = AgentSession()

@@ -49,7 +49,7 @@ def relay():
         if not goal:
             return _sse([{"message": "Missing goal text after GOAL:"}, {"done": True}])
 
-        session.start(goal)
+        session.start(goal, restart_if_running=True)
 
         def stream_agent():
             for item in session.stream():

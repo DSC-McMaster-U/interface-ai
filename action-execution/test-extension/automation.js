@@ -86,13 +86,18 @@
 
     if (!input) return { success: false, error: 'No input found: "' + identifier + '"' };
 
-    var setter =
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set ||
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+    var isTextArea = input.tagName === 'TEXTAREA';
+    var setter = isTextArea
+      ? Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+      : Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
 
     input.focus();
-    if (setter) setter.call(input, value);
-    else input.value = value;
+    try {
+      if (setter) setter.call(input, String(value));
+      else input.value = String(value);
+    } catch (err) {
+      input.value = String(value);
+    }
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
 

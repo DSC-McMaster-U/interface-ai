@@ -2,10 +2,12 @@ import json
 import threading
 from typing import Any, Callable
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
+
+from app.langgraph.utilities import content_to_text, invoke_with_retry, parse_verdict_json
 
 
 def run_architecture_1(
@@ -114,37 +116,109 @@ def run_architecture_1(
     initial_status = approved_send("getPageStatus", {})
     context = json.dumps(initial_status)[:6000]
 
-    inputs = {
-        "messages": [
-            SystemMessage(
-                content=(
-                    "You are a browser automation agent. Use tools to complete the goal. "
-                    "Call one tool at a time and keep responses short. "
-                    "When done, respond with a short final answer and no tool calls."
-                )
-            ),
-            HumanMessage(content=f"Goal: {goal}"),
-            HumanMessage(content=f"Initial page status: {context}"),
-        ]
-    }
-    final_text = ""
+    messages: list[BaseMessage] = [
+        SystemMessage(
+            content=(
+                "You are a browser automation agent. Use tools to complete the goal. "
+                "Call one tool at a time. If a tool fails, you must try a different approach. "
+                "Do not say done until completion is verified from getPageStatus."
+                "Always continue going and calling tools until the goal is complete, dont just stop midway. Be persistent and try different approaches if you fail."
+            )
+        ),
+        HumanMessage(content=f"Goal: {goal}"),
+        HumanMessage(content=f"Initial page status: {context}"),
+    ]
 
-    for i, state in enumerate(agent.stream(inputs, stream_mode="values"), start=1):
-        if stop_event.is_set() or i > max_steps:
+    remaining_attempts = max_steps
+    last_agent_text = ""
+
+    while remaining_attempts > 0 and not stop_event.is_set():
+        used_steps = 0
+        latest_messages = messages
+
+        stream_succeeded = False
+        stream_error: Exception | None = None
+        for stream_attempt in range(3):
+            try:
+                for i, state in enumerate(agent.stream({"messages": messages}, stream_mode="values"), start=1):
+                    used_steps = i
+                    latest_messages = state.get("messages") or latest_messages
+                    last = latest_messages[-1] if latest_messages else None
+                    if isinstance(last, AIMessage):
+                        text = content_to_text(last.content)
+                        if text:
+                            last_agent_text = text
+                            emit(f"Agent: {text}")
+                    # Limit one agent pass to a reasonable number of state updates.
+                    if i >= 25 or stop_event.is_set():
+                        break
+                stream_succeeded = True
+                break
+            except Exception as exc:
+                stream_error = exc
+                emit(f"Transient model error during planning: {type(exc).__name__}: {exc}")
+                import time
+
+                time.sleep(0.75 * (stream_attempt + 1))
+        if not stream_succeeded:
+            emit(f"Could not continue planning this pass: {type(stream_error).__name__}: {stream_error}")
+
+        remaining_attempts -= 1
+        messages = latest_messages
+
+        if stop_event.is_set():
             break
 
-        messages = state.get("messages") or []
-        if not messages:
-            continue
+        verify_status = approved_send("getPageStatus", {})
+        verify_context = json.dumps(verify_status)[:6000]
 
-        last = messages[-1]
-        if isinstance(last, AIMessage):
-            text = (last.content or "").strip()
-            if text:
-                final_text = text
-                emit(f"Agent: {text}")
+        verdict = invoke_with_retry(
+            model,
+            [
+                SystemMessage(
+                    content=(
+                        "Decide if the user's browser task is complete based only on goal and page status. "
+                        "Be strict and conservative: done=true only when the goal outcome is clearly achieved. "
+                        "Respond as strict JSON only: "
+                        "{\"done\": true|false, \"reason\": \"...\", \"next_step_hint\": \"...\"}."
+                    )
+                ),
+                HumanMessage(content=f"Goal: {goal}\nLatest page status JSON: {verify_context}"),
+            ],
+        )
+        verdict_text = content_to_text(getattr(verdict, "content", ""))
+        done = False
+        reason = "Unknown reason"
+        next_step_hint = "Try a different action based on the current page status."
+        try:
+            parsed = parse_verdict_json(verdict_text)
+            done = bool(parsed.get("done", False))
+            reason = str(parsed.get("reason", reason))
+            next_step_hint = str(parsed.get("next_step_hint", next_step_hint))
+        except Exception:
+            done = '"done": true' in verdict_text.lower()
+            reason = verdict_text[:300] if verdict_text else reason
+
+        if done:
+            emit(f"Done. Completed overall task: {goal}")
+            emit(f"Completion reason: {reason}")
+            return
+
+        messages = [
+            *messages,
+            HumanMessage(
+                content=(
+                    f"Task is not complete yet. Reason: {reason}. "
+                    f"Suggested next direction: {next_step_hint}. "
+                    "Try a different approach and continue."
+                )
+            ),
+        ]
+        emit(f"Goal not complete yet: {reason}")
 
     if stop_event.is_set():
         emit("Agent stopped.")
-    elif final_text:
-        emit(final_text)
+    elif last_agent_text:
+        emit(f"Stopped before completion. Last agent update: {last_agent_text}")
+    else:
+        emit("Stopped before completion.")
