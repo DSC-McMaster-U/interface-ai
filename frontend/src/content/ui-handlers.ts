@@ -31,6 +31,16 @@ async function appendPersistedMessage(message: ChatMessage): Promise<void> {
   await storageSet(CHAT_STORAGE_KEY, next);
 }
 
+async function clearPersistedMessages(): Promise<void> {
+  await storageSet(CHAT_STORAGE_KEY, []);
+}
+
+function clearMessagesUI(shadowRoot: ShadowRoot | null): void {
+  const container = shadowRoot?.getElementById("messages-container");
+  if (!container) return;
+  container.innerHTML = "";
+}
+
 export async function restoreMessages(shadowRoot: ShadowRoot | null): Promise<void> {
   const container = shadowRoot?.getElementById("messages-container");
   if (!container) return;
@@ -138,6 +148,14 @@ export function setupInput(
   const sendMessage = async () => {
     const message = input?.value.trim();
     if (!message) return;
+
+    if (message.toUpperCase() === "CLEAR") {
+      input.value = "";
+      handlers.showLoading(false);
+      clearMessagesUI(shadowRoot);
+      await clearPersistedMessages();
+      return;
+    }
 
     handlers.addMessage(message, "user");
     input.value = "";

@@ -1,5 +1,4 @@
 import json
-import os
 
 from flask import Flask, Response, jsonify, request, stream_with_context
 from flask_cors import CORS
@@ -62,6 +61,18 @@ def relay():
 
         return _sse(stream_agent())
 
+    if msg.upper() == "APPROVAL ON":
+        session.set_require_approval(True)
+        return _sse([{"message": "Approval mode: ON"}, {"done": True}])
+
+    if msg.upper() == "APPROVAL OFF":
+        session.set_require_approval(False)
+        return _sse([{"message": "Approval mode: OFF"}, {"done": True}])
+
+    if msg.upper() == "APPROVAL STATUS":
+        status = "ON" if session.get_require_approval() else "OFF"
+        return _sse([{"message": f"Approval mode: {status}"}, {"done": True}])
+
     if msg and (session.is_running() or session.is_waiting_for_approval()):
         session.submit_user_message(msg)
         return _sse([{"message": "Message delivered to agent session."}, {"done": True}])
@@ -88,4 +99,4 @@ def _sse(items):
 
 if __name__ == "__main__":
     start_websocket_server()
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+    app.run(host="0.0.0.0", port=5000)

@@ -1,6 +1,7 @@
 import os
 import queue
 import threading
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -25,12 +26,19 @@ class AgentSession:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._goal: str = ""
+        self._require_approval: bool = True
 
     def is_running(self) -> bool:
         return bool(self._thread and self._thread.is_alive())
 
     def is_waiting_for_approval(self) -> bool:
         return self._pending_action is not None
+
+    def set_require_approval(self, enabled: bool) -> None:
+        self._require_approval = bool(enabled)
+
+    def get_require_approval(self) -> bool:
+        return self._require_approval
 
     def start(self, goal: str) -> None:
         with self._lock:
@@ -86,6 +94,10 @@ class AgentSession:
         send_agent_log(message)
 
     def _approve(self, action: str, params: dict[str, Any]) -> bool:
+        if not self._require_approval:
+            self._emit(f"[tool:auto-approved] {action} {json.dumps(params, ensure_ascii=True)}")
+            return True
+
         self._pending_action = ProposedAction(action, params)
         self._approval_decision = None
         self._feedback = None
@@ -110,10 +122,17 @@ class AgentSession:
         if self._stop.is_set():
             return {"success": False, "error": "stopped"}
 
+        self._emit(f"[tool:call] {action} {json.dumps(payload, ensure_ascii=True)}")
         if not self._approve(action, payload):
+            self._emit(f"[tool:rejected] {action}")
             return {"success": False, "error": "user_rejected", "feedback": self._feedback}
 
         result = send_command_sync(action, payload)
+        try:
+            compact = json.dumps(result, ensure_ascii=True)
+        except Exception:
+            compact = str(result)
+        self._emit(f"[tool:result] {action} {compact[:1200]}")
         if result.get("error") in {"No browser connected", "WebSocket server not running"}:
             self._emit("Browser extension not connected. Agent stopped.")
             self.stop()
@@ -127,7 +146,7 @@ class AgentSession:
             return
 
         self._emit(f"Agent started. Goal: {self._goal}")
-        max_steps = int(os.getenv("AGENT_MAX_STEPS", "20"))
+        max_steps = 20
 
         run_architecture_1(
             api_key=api_key,

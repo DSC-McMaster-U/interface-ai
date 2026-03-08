@@ -1,12 +1,11 @@
 import asyncio
 import json
-import os
 import threading
 from typing import Any
 
 import websockets
 
-EXTENSION_WS_PORT = int(os.getenv("EXTENSION_WS_PORT", "7878"))
+EXTENSION_WS_PORT = 7878
 
 _connected: Any = None
 _pending: dict[int, asyncio.Future] = {}

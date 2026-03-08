@@ -1,5 +1,4 @@
 import json
-import os
 import threading
 from typing import Any, Callable
 
@@ -106,7 +105,7 @@ def run_architecture_1(
     ]
 
     model = ChatGoogleGenerativeAI(
-        model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+        model="gemini-2.5-flash",
         google_api_key=api_key,
         temperature=0.2,
     )
