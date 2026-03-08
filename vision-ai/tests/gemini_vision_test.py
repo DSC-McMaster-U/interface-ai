@@ -167,7 +167,7 @@ BEFORE answering, think step by step:
     try:
         # Call Gemini Vision API
         response = _gemini_client.models.generate_content(
-            model='gemini-2.5-flash',  # Free vision-enabled model (latest)
+            model='gemini-3-pro-preview',
             contents=[
                 image,
                 prompt
