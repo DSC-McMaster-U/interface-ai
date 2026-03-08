@@ -390,6 +390,12 @@
           return;
         }
 
+        if (!msg.action) {
+          // Ignore non-command messages
+          console.log('[InterfaceAI] Ignoring WS message (no action):', msg);
+          return;
+        }
+
         console.log('[InterfaceAI] Command (CLI):', msg.action, msg.params || {});
         var result = execute(msg.action, msg.params || {});
         console.log('[InterfaceAI] Result:', result);

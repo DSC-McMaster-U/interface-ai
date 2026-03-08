@@ -5,5 +5,8 @@ redis==5.0.8
 psycopg2-binary==2.9.9
 requests==2.32.3
 psycopg[binary]>=3.1.0
+langchain>=0.2.0
+langchain-google-genai>=1.0.5
+langgraph>=0.2.0
 ruff
 pytest==8.3.4

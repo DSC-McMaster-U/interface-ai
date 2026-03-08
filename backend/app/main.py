@@ -170,6 +170,47 @@ def relay():
     else:
         message = request.args.get("message", "")
 
+    if message.strip().upper().startswith("GOAL:"):
+        from app.agent_execution import session
+
+        goal = message.split(":", 1)[-1].strip()
+        if not goal:
+            def bad_goal_stream():
+                yield f"data: {json.dumps({'message': 'Missing goal text after GOAL:'})}\n\n"
+                yield f"data: {json.dumps({'done': True})}\n\n"
+
+            return Response(
+                stream_with_context(bad_goal_stream()),
+                mimetype="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "X-Accel-Buffering": "no",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Headers": "*",
+                },
+            )
+
+        session.start(goal)
+
+        def agent_stream():
+            for item in session.stream():
+                if "message" in item:
+                    yield f"data: {json.dumps({'message': item['message']})}\n\n"
+                if item.get("done"):
+                    yield f"data: {json.dumps({'done': True})}\n\n"
+                    break
+
+        return Response(
+            stream_with_context(agent_stream()),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+
     if message.strip().lower() == "hello":
         from app.extension_automation import run_demo_sequence
 
@@ -185,6 +226,26 @@ def relay():
 
         return Response(
             stream_with_context(demo_stream()),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+
+    from app.agent_execution import session
+
+    if message.strip() and (session.is_running() or session.is_waiting_for_approval()):
+        session.submit_user_message(message)
+
+        def ack_stream():
+            yield f"data: {json.dumps({'message': 'Message delivered to agent session.'})}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
+
+        return Response(
+            stream_with_context(ack_stream()),
             mimetype="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",

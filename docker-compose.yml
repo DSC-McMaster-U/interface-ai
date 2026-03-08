@@ -10,8 +10,12 @@ services:
       - REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgresql://user:password@postgres:5432/interfaceai
       - PYTHONUNBUFFERED=1
+      - LANGCHAIN_DEBUG=${LANGCHAIN_DEBUG:-0}
+      - LANGCHAIN_VERBOSE=${LANGCHAIN_VERBOSE:-0}
       - VISION_AI_URL=http://vision-ai:6000
       - PLAYWRIGHT_URL=http://playwright:7000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-flash}
     depends_on:
       - redis
       - postgres
