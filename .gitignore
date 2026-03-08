@@ -5,3 +5,4 @@ __pycache__/
 .env
 vision-ai/tests/output-images/*
 */venv
+*/node_modules/*
