@@ -152,16 +152,96 @@ export function pressEnter(): ActionResult {
   const active = document.activeElement as HTMLElement | null;
   if (active) {
     active.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }),
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        bubbles: true,
+      }),
     );
     active.dispatchEvent(
-      new KeyboardEvent("keypress", { key: "Enter", code: "Enter", bubbles: true }),
+      new KeyboardEvent("keypress", {
+        key: "Enter",
+        code: "Enter",
+        bubbles: true,
+      }),
     );
     active.dispatchEvent(
-      new KeyboardEvent("keyup", { key: "Enter", code: "Enter", bubbles: true }),
+      new KeyboardEvent("keyup", {
+        key: "Enter",
+        code: "Enter",
+        bubbles: true,
+      }),
     );
   }
   return { success: true };
+}
+
+export function pressEnterOn(identifier: string): ActionResult {
+  const lower = identifier.toLowerCase();
+
+  let input: HTMLInputElement | HTMLTextAreaElement | null =
+    document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      `input[name="${identifier}" i], textarea[name="${identifier}" i]`,
+    ) ||
+    document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      `#${CSS.escape(identifier)}`,
+    ) ||
+    document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      `input[placeholder*="${identifier}" i], textarea[placeholder*="${identifier}" i]`,
+    ) ||
+    document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      `input[aria-label*="${identifier}" i], textarea[aria-label*="${identifier}" i]`,
+    );
+
+  if (!input) {
+    for (const label of document.querySelectorAll("label")) {
+      if (label.textContent?.toLowerCase().includes(lower)) {
+        const forAttr = label.getAttribute("for");
+        input = forAttr
+          ? (document.getElementById(forAttr) as HTMLInputElement | null)
+          : label.querySelector("input, textarea");
+        if (input) break;
+      }
+    }
+  }
+
+  if (!input) {
+    const typeMap: Record<string, string> = {
+      search: 'input[type="search"], input[name*="search" i]',
+      email: 'input[type="email"]',
+      password: 'input[type="password"]',
+    };
+    if (typeMap[lower]) {
+      input = document.querySelector(typeMap[lower]);
+    }
+  }
+
+  if (!input) {
+    return {
+      success: false,
+      error: `No input found matching: "${identifier}"`,
+    };
+  }
+
+  input.focus();
+  input.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "Enter",
+      code: "Enter",
+      bubbles: true,
+    }),
+  );
+  input.dispatchEvent(
+    new KeyboardEvent("keypress", {
+      key: "Enter",
+      code: "Enter",
+      bubbles: true,
+    }),
+  );
+  input.dispatchEvent(
+    new KeyboardEvent("keyup", { key: "Enter", code: "Enter", bubbles: true }),
+  );
+  return { success: true, name: input.name || input.id || input.placeholder };
 }
 
 export function typeText(text: string): ActionResult {
@@ -200,7 +280,8 @@ export function getPageStatus(): PageStatus {
       maxScroll: document.body.scrollHeight,
       percent:
         Math.round(
-          (window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100,
+          (window.scrollY / (document.body.scrollHeight - window.innerHeight)) *
+            100,
         ) || 0,
     },
     headings: Array.from(document.querySelectorAll("h1,h2,h3"))
@@ -262,6 +343,7 @@ export type ActionType =
   | { type: "fillInput"; identifier: string; value: string }
   | { type: "clickFirstSearchResult" }
   | { type: "pressEnter" }
+  | { type: "pressEnterOn"; identifier: string }
   | { type: "typeText"; text: string }
   | { type: "getPageStatus" };
 
@@ -285,6 +367,8 @@ export function executeAction(action: ActionType): ActionResult | PageStatus {
       return clickFirstSearchResult();
     case "pressEnter":
       return pressEnter();
+    case "pressEnterOn":
+      return pressEnterOn(action.identifier);
     case "typeText":
       return typeText(action.text);
     case "getPageStatus":
@@ -314,6 +398,8 @@ export function describeAction(action: ActionType): string {
       return "Click first search result";
     case "pressEnter":
       return "Press Enter";
+    case "pressEnterOn":
+      return `Press Enter on "${action.identifier}"`;
     case "typeText":
       return `Type "${action.text}"`;
     case "getPageStatus":

@@ -154,13 +154,23 @@ async function relayActionToTab(
   if (!tab?.id) return { success: false, error: "No active tab found" };
 
   return new Promise((resolve) => {
-    chrome.tabs.sendMessage(tab.id!, { type: "EXECUTE_ACTION", payload }, (response) => {
-      if (chrome.runtime.lastError) {
-        resolve({ success: false, error: chrome.runtime.lastError.message || "Tab communication error" });
-      } else {
-        resolve(response || { success: false, error: "No response from tab" });
-      }
-    });
+    chrome.tabs.sendMessage(
+      tab.id!,
+      { type: "EXECUTE_ACTION", payload },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          resolve({
+            success: false,
+            error:
+              chrome.runtime.lastError.message || "Tab communication error",
+          });
+        } else {
+          resolve(
+            response || { success: false, error: "No response from tab" },
+          );
+        }
+      },
+    );
   });
 }
 
@@ -232,7 +242,22 @@ chrome.runtime.onMessage.addListener(
         .catch((error) => {
           sendResponse({
             success: false,
-            error: error instanceof Error ? error.message : "Action relay failed",
+            error:
+              error instanceof Error ? error.message : "Action relay failed",
+          });
+        });
+
+      return true;
+    }
+
+    if (message.type === "TAKE_SCREENSHOT") {
+      chrome.tabs
+        .captureVisibleTab({ format: "png" })
+        .then((dataUrl) => sendResponse({ success: true, data: dataUrl }))
+        .catch((error) => {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : "Screenshot failed",
           });
         });
 

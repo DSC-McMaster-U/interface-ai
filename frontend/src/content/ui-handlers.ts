@@ -42,6 +42,27 @@ function addActionMessage(
   container.scrollTop = container.scrollHeight;
 }
 
+function addImageMessage(
+  shadowRoot: ShadowRoot | null,
+  dataUrl: string,
+): void {
+  const container = shadowRoot?.getElementById("messages-container");
+  if (!container) return;
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "message assistant";
+
+  const img = document.createElement("img");
+  img.src = dataUrl;
+  img.style.cssText =
+    "max-width:100%;border-radius:6px;margin-top:4px;display:block;";
+  img.alt = "Page screenshot";
+
+  wrapper.appendChild(img);
+  container.appendChild(wrapper);
+  container.scrollTop = container.scrollHeight;
+}
+
 // -------------------- ACTION RUNNER --------------------
 
 async function runActions(
@@ -72,7 +93,7 @@ const HELP_TEXT = `Available commands:
 /click <name>            — click button or link by text
 /fill <field> <value>    — fill an input by name/label
 /type <text>             — type text into the focused element
-/enter                   — press Enter
+/enter [field]           — press Enter (on active or named field)
 /scroll up [px]          — scroll up (default 500px)
 /scroll down [px]        — scroll down (default 500px)
 /scroll top              — scroll to top
@@ -81,7 +102,11 @@ const HELP_TEXT = `Available commands:
 /coord <x> <y>           — click at screen coordinates
 /result                  — click first search result
 /status                  — show page info
-/help                    — show this list`;
+/screenshot              — take a screenshot of the current page
+/help                    — show this list
+
+Chain commands by separating with ", ":
+  /fill search computers, /enter search`;
 
 import { getPageStatus } from "./actions";
 import {
@@ -94,6 +119,7 @@ import {
   scrollToBottom,
   fillInput,
   pressEnter,
+  pressEnterOn,
   typeText,
 } from "./actions";
 import type { PageStatus } from "./actions";
@@ -106,25 +132,40 @@ function formatStatus(s: PageStatus): string {
   ];
   if (s.headings.length)
     lines.push(
-      `Headings: ${s.headings.slice(0, 5).map((h) => `[${h.level}] ${h.text}`).join(", ")}`,
+      `Headings: ${s.headings
+        .slice(0, 5)
+        .map((h) => `[${h.level}] ${h.text}`)
+        .join(", ")}`,
     );
   if (s.buttons.length)
     lines.push(
-      `Buttons: ${s.buttons.slice(0, 6).map((b) => b.text || "(no label)").join(", ")}`,
+      `Buttons: ${s.buttons
+        .slice(0, 6)
+        .map((b) => b.text || "(no label)")
+        .join(", ")}`,
     );
   if (s.textboxes.length)
-    lines.push(`Inputs: ${s.textboxes.slice(0, 6).map((i) => i.name).join(", ")}`);
+    lines.push(
+      `Inputs: ${s.textboxes
+        .slice(0, 6)
+        .map((i) => i.name)
+        .join(", ")}`,
+    );
   if (s.links.length)
     lines.push(
-      `Links: ${s.links.slice(0, 5).map((l) => l.text || l.href).join(", ")}`,
+      `Links: ${s.links
+        .slice(0, 5)
+        .map((l) => l.text || l.href)
+        .join(", ")}`,
     );
   return lines.join("\n");
 }
 
 async function handleCommand(
-  _shadowRoot: ShadowRoot | null,
+  shadowRoot: ShadowRoot | null,
   raw: string,
   addMsg: (text: string, type: "user" | "assistant" | "error") => void,
+  ctx: { lastFilledField?: string } = {},
 ): Promise<boolean> {
   if (!raw.startsWith("/")) return false;
 
@@ -153,7 +194,10 @@ async function handleCommand(
     }
 
     case "click": {
-      if (!args) { fail("Usage: /click <name>"); return true; }
+      if (!args) {
+        fail("Usage: /click <name>");
+        return true;
+      }
       report(clickByName(args), `Click "${args}"`);
       return true;
     }
@@ -165,18 +209,27 @@ async function handleCommand(
       }
       const field = argParts[0];
       const value = argParts.slice(1).join(" ");
+      ctx.lastFilledField = field;
       report(fillInput(field, value), `Fill "${field}" with "${value}"`);
       return true;
     }
 
     case "type": {
-      if (!args) { fail("Usage: /type <text>"); return true; }
+      if (!args) {
+        fail("Usage: /type <text>");
+        return true;
+      }
       report(typeText(args), `Type "${args}"`);
       return true;
     }
 
     case "enter": {
-      report(pressEnter(), "Press Enter");
+      const target = args || ctx.lastFilledField;
+      if (target) {
+        report(pressEnterOn(target), `Press Enter on "${target}"`);
+      } else {
+        report(pressEnter(), "Press Enter");
+      }
       return true;
     }
 
@@ -198,23 +251,44 @@ async function handleCommand(
     }
 
     case "goto": {
-      if (!args) { fail("Usage: /goto <url>"); return true; }
+      if (!args) {
+        fail("Usage: /goto <url>");
+        return true;
+      }
       const url = args.startsWith("http") ? args : `https://${args}`;
       ok(`Navigating to ${url}`);
-      setTimeout(() => { window.location.href = url; }, 300);
+      setTimeout(() => {
+        window.location.href = url;
+      }, 300);
       return true;
     }
 
     case "coord": {
       const x = parseFloat(argParts[0]);
       const y = parseFloat(argParts[1]);
-      if (isNaN(x) || isNaN(y)) { fail("Usage: /coord <x> <y>"); return true; }
+      if (isNaN(x) || isNaN(y)) {
+        fail("Usage: /coord <x> <y>");
+        return true;
+      }
       report(clickAtCoordinate(x, y), `Click at (${x}, ${y})`);
       return true;
     }
 
     case "result": {
       report(clickFirstSearchResult(), "Click first search result");
+      return true;
+    }
+
+    case "screenshot": {
+      addMsg("Taking screenshot...", "assistant");
+      const response = await new Promise<{ success: boolean; data?: string; error?: string }>(
+        (resolve) => chrome.runtime.sendMessage({ type: "TAKE_SCREENSHOT" }, resolve),
+      );
+      if (response?.success && response.data) {
+        addImageMessage(shadowRoot, response.data);
+      } else {
+        fail(`Screenshot failed — ${response?.error ?? "unknown error"}`);
+      }
       return true;
     }
 
@@ -226,7 +300,10 @@ async function handleCommand(
 
 // -------------------- LOADING --------------------
 
-export function showLoading(shadowRoot: ShadowRoot | null, show: boolean): void {
+export function showLoading(
+  shadowRoot: ShadowRoot | null,
+  show: boolean,
+): void {
   const container = shadowRoot?.getElementById("messages-container");
   if (!container) return;
 
@@ -251,7 +328,9 @@ export function showLoading(shadowRoot: ShadowRoot | null, show: boolean): void 
 
 // -------------------- BACKGROUND RELAY --------------------
 
-export function sendToBackground(message: ApiRequestMessage): Promise<ApiResponse> {
+export function sendToBackground(
+  message: ApiRequestMessage,
+): Promise<ApiResponse> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(message, (response: ApiResponse) => {
       if (chrome.runtime.lastError) {
@@ -288,9 +367,16 @@ export function setupInput(
     handlers.addMessage(message, "user");
     input.value = "";
 
-    // Handle slash commands locally — no API call needed
-    const wasCommand = await handleCommand(shadowRoot, message, handlers.addMessage);
-    if (wasCommand) return;
+    // Handle slash commands locally — supports chaining with ", /"
+    if (message.startsWith("/")) {
+      const parts = message.split(/,\s*(?=\/)/);
+      const ctx: { lastFilledField?: string } = {};
+      for (const part of parts) {
+        await handleCommand(shadowRoot, part.trim(), handlers.addMessage, ctx);
+        if (parts.length > 1) await new Promise((r) => setTimeout(r, 200));
+      }
+      return;
+    }
 
     // Fall through to backend API for regular chat messages
     handlers.showLoading(true);
