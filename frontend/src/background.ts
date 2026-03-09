@@ -28,6 +28,11 @@ interface UpdateUserSettingsMessage {
   payload: UserSettings;
 }
 
+interface ExecuteActionMessage {
+  type: "EXECUTE_ACTION";
+  payload: Record<string, unknown>;
+}
+
 interface ApiResponse {
   success: boolean;
   data?: unknown;
@@ -139,6 +144,37 @@ async function updateUserSettings(
 }
 
 /**
+ * Relay an action to the active tab's content script
+ */
+async function relayActionToTab(
+  payload: Record<string, unknown>,
+): Promise<ApiResponse> {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tab = tabs[0];
+  if (!tab?.id) return { success: false, error: "No active tab found" };
+
+  return new Promise((resolve) => {
+    chrome.tabs.sendMessage(
+      tab.id!,
+      { type: "EXECUTE_ACTION", payload },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          resolve({
+            success: false,
+            error:
+              chrome.runtime.lastError.message || "Tab communication error",
+          });
+        } else {
+          resolve(
+            response || { success: false, error: "No response from tab" },
+          );
+        }
+      },
+    );
+  });
+}
+
+/**
  * Listen for messages from content scripts
  */
 chrome.runtime.onMessage.addListener(
@@ -147,6 +183,7 @@ chrome.runtime.onMessage.addListener(
       | ApiRequestMessage
       | GetUserSettingsMessage
       | UpdateUserSettingsMessage
+      | ExecuteActionMessage
       | { type: string },
     _sender: chrome.runtime.MessageSender,
     sendResponse: (response: ApiResponse) => void,
@@ -193,6 +230,34 @@ chrome.runtime.onMessage.addListener(
               error instanceof Error
                 ? error.message
                 : "Failed to update settings",
+          });
+        });
+
+      return true;
+    }
+
+    if (message.type === "EXECUTE_ACTION") {
+      relayActionToTab((message as ExecuteActionMessage).payload)
+        .then(sendResponse)
+        .catch((error) => {
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error ? error.message : "Action relay failed",
+          });
+        });
+
+      return true;
+    }
+
+    if (message.type === "TAKE_SCREENSHOT") {
+      chrome.tabs
+        .captureVisibleTab({ format: "png" })
+        .then((dataUrl) => sendResponse({ success: true, data: dataUrl }))
+        .catch((error) => {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : "Screenshot failed",
           });
         });
 
