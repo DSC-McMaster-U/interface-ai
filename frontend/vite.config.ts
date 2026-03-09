@@ -17,7 +17,7 @@ export default defineConfig({
           dest: ".",
         },
         {
-          src: "public/logo_128px.svg",
+          src: "public/logo_128.png",
           dest: ".",
         },
         {

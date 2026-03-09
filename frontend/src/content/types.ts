@@ -2,6 +2,8 @@
  * TypeScript interfaces for message passing between content and background scripts
  */
 
+import type { ActionType } from "./actions";
+
 export interface ApiRequestMessage {
   type: "API_REQUEST";
   payload: {
@@ -15,6 +17,19 @@ export interface ApiResponse {
   success: boolean;
   data?: unknown;
   error?: string;
+}
+
+/** Expected response shape from the backend chat/relay endpoint */
+export interface ChatApiResponse {
+  message?: string;
+  echo?: string;
+  actions?: ActionType[];
+}
+
+/** Message sent from background to content script to execute an action */
+export interface ExecuteActionMessage {
+  type: "EXECUTE_ACTION";
+  payload: ActionType;
 }
 
 export interface UserSettings {

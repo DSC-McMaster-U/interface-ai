@@ -5,9 +5,11 @@
   "description": "Chrome extension for InterfaceAI",
   "action": {
     "default_title": "InterfaceAI - Click to activate",
-    "default_icon": "logo_128px.svg"
+    "default_icon": "logo_128.png"
   },
-  "icons": { "128": "logo_128px.svg" },
+  "icons": {
+    "128": "logo_128.png"
+  },
   "permissions": ["activeTab", "scripting", "tabs", "storage"],
   "host_permissions": ["http://localhost:5000/*", "<all_urls>"],
   "background": {
@@ -30,5 +32,11 @@
       "suggested_key": { "default": "Ctrl+Shift+U", "mac": "Command+Shift+U" },
       "description": "Open InterfaceAI settings"
     }
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["logo_128.png"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
