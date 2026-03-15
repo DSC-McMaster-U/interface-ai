@@ -161,6 +161,8 @@ class AgentSession:
             return False
 
         approved = self._approval_decision == "YES"
+        if approved:
+            self._emit(f"[tool:approved] {action} {json.dumps(params, ensure_ascii=True)}")
         if not approved and self._feedback:
             self._emit(f"Feedback received: {self._feedback}")
         return approved
@@ -187,9 +189,9 @@ class AgentSession:
             compact = json.dumps(result, ensure_ascii=True)
         except Exception:
             compact = str(result)
-        self._emit(f"[tool:result] {action} {compact[:1200]}")
-        if result.get("error") in {"No browser connected", "WebSocket server not running"}:
-            self._emit("Browser extension not connected. Agent stopped.")
+        self._emit(f"[tool:result] {action} {compact}")
+        if result.get("error") == "WebSocket server not running":
+            self._emit("Browser extension WS server not running. Agent stopped.")
             self.stop()
         return result
 

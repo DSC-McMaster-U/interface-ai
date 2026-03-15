@@ -3,13 +3,27 @@
  */
 
 import type { ApiRequestMessage, ApiResponse } from "./types";
+import { parseCommand, summarizeResult } from "./command-parser";
 
 type ChatMessage = {
   text: string;
   type: "user" | "assistant" | "error";
 };
 
+type ToolStage = "call" | "approved" | "auto-approved" | "result" | "rejected";
+
+type ToolCard = {
+  action: string;
+  paramsRaw: string;
+  root: HTMLDetailsElement;
+  meta: HTMLSpanElement;
+  main: HTMLSpanElement;
+  output: HTMLPreElement;
+  status: "pending" | "approved" | "rejected" | "done";
+};
+
 const CHAT_STORAGE_KEY = "interface_ai_chat_messages";
+const pendingToolCards: ToolCard[] = [];
 
 function storageGet<T>(key: string): Promise<T | undefined> {
   return new Promise((resolve) => {
@@ -39,6 +53,7 @@ function clearMessagesUI(shadowRoot: ShadowRoot | null): void {
   const container = shadowRoot?.getElementById("messages-container");
   if (!container) return;
   container.innerHTML = "";
+  pendingToolCards.length = 0;
 }
 
 export async function restoreMessages(shadowRoot: ShadowRoot | null): Promise<void> {
@@ -47,6 +62,7 @@ export async function restoreMessages(shadowRoot: ShadowRoot | null): Promise<vo
 
   const existing = (await storageGet<ChatMessage[]>(CHAT_STORAGE_KEY)) || [];
   container.innerHTML = "";
+  pendingToolCards.length = 0;
   for (const msg of existing) {
     addMessage(shadowRoot, msg.text, msg.type, false);
   }
@@ -64,6 +80,18 @@ export function addMessage(
   const container = shadowRoot?.getElementById("messages-container");
   if (!container) return;
 
+  const toolHandled =
+    type === "assistant" ? renderToolEventMessage(container, text) : false;
+  if (toolHandled) {
+    if (persist) {
+      appendPersistedMessage({ text, type }).catch(() => {
+        // ignore storage failures
+      });
+    }
+    container.scrollTop = container.scrollHeight;
+    return;
+  }
+
   const messageEl = document.createElement("div");
   messageEl.className = `message ${type}`;
   messageEl.textContent = text;
@@ -77,6 +105,169 @@ export function addMessage(
 
   // Scroll to bottom
   container.scrollTop = container.scrollHeight;
+}
+
+function renderToolEventMessage(container: HTMLElement, text: string): boolean {
+  const parsed = parseToolLine(text);
+  if (!parsed) return false;
+
+  if (parsed.stage === "call") {
+    const card = createToolCard(parsed.action, parsed.rawPayload);
+    pendingToolCards.push(card);
+    container.appendChild(card.root);
+    return true;
+  }
+
+  const card = findLatestPending(parsed.action, parsed.rawPayload);
+  if (!card) {
+    const newCard = createToolCard(parsed.action, "");
+    pendingToolCards.push(newCard);
+    container.appendChild(newCard.root);
+    applyToolUpdate(newCard, parsed.stage, parsed.rawPayload);
+    return true;
+  }
+
+  applyToolUpdate(card, parsed.stage, parsed.rawPayload);
+  return true;
+}
+
+function parseToolLine(
+  line: string,
+): { stage: ToolStage; action: string; rawPayload: string } | null {
+  const m = line.match(/^\[tool:(call|approved|auto-approved|result|rejected)\]\s+(\S+)\s*(.*)$/);
+  if (!m) return null;
+  const [, stage, action, payload] = m;
+  return {
+    stage: stage as ToolStage,
+    action,
+    rawPayload: (payload || "").trim(),
+  };
+}
+
+function findLatestPending(action: string, rawPayload: string): ToolCard | undefined {
+  const sameAction = [...pendingToolCards]
+    .reverse()
+    .find((c) => c.action === action && c.status !== "done");
+  if (sameAction) return sameAction;
+
+  if (!rawPayload) return undefined;
+  const samePayload = [...pendingToolCards]
+    .reverse()
+    .find((c) => c.paramsRaw === rawPayload && c.status !== "done");
+  return samePayload;
+}
+
+function createToolCard(action: string, rawParams: string): ToolCard {
+  const root = document.createElement("details");
+  root.className = "message assistant tool-event";
+  root.dataset.action = action;
+  root.dataset.status = "pending";
+
+  const summary = document.createElement("summary");
+  summary.className = "tool-summary";
+  const main = document.createElement("span");
+  main.className = "tool-main";
+  main.textContent = `${action} ${compactArgs(rawParams)}`.trim();
+
+  const meta = document.createElement("span");
+  meta.className = "tool-meta";
+  meta.textContent = "pending";
+
+  summary.appendChild(main);
+  summary.appendChild(meta);
+
+  const body = document.createElement("div");
+  body.className = "tool-body";
+
+  const paramsLabel = document.createElement("div");
+  paramsLabel.className = "tool-label";
+  paramsLabel.textContent = "params";
+
+  const paramsPre = document.createElement("pre");
+  paramsPre.className = "tool-pre";
+  paramsPre.textContent = prettyPayload(rawParams || "{}");
+
+  const outputLabel = document.createElement("div");
+  outputLabel.className = "tool-label";
+  outputLabel.textContent = "output";
+
+  const outputPre = document.createElement("pre");
+  outputPre.className = "tool-pre";
+  outputPre.textContent = "(waiting for result)";
+
+  body.appendChild(paramsLabel);
+  body.appendChild(paramsPre);
+  body.appendChild(outputLabel);
+  body.appendChild(outputPre);
+
+  root.appendChild(summary);
+  root.appendChild(body);
+
+  return {
+    action,
+    paramsRaw: rawParams,
+    root,
+    meta,
+    main,
+    output: outputPre,
+    status: "pending",
+  };
+}
+
+function applyToolUpdate(card: ToolCard, stage: ToolStage, rawPayload: string): void {
+  if (stage === "auto-approved") {
+    card.status = "approved";
+    card.meta.textContent = "auto-approved";
+    card.root.dataset.status = "auto-approved";
+    return;
+  }
+  if (stage === "approved") {
+    card.status = "approved";
+    card.meta.textContent = "approved";
+    card.root.dataset.status = "approved";
+    return;
+  }
+  if (stage === "rejected") {
+    card.status = "rejected";
+    card.meta.textContent = "rejected";
+    card.output.textContent = rawPayload ? prettyPayload(rawPayload) : "Rejected by user.";
+    card.root.dataset.status = "rejected";
+    card.root.open = true;
+    return;
+  }
+  if (stage === "result") {
+    const wasApproved = card.status === "approved";
+    card.status = "done";
+    card.meta.textContent = wasApproved ? `${card.meta.textContent} -> done` : "done";
+    card.output.textContent = prettyPayload(rawPayload || "{}");
+    card.root.dataset.status = "done";
+    card.main.textContent = `${card.action} ${compactArgs(card.paramsRaw)}`.trim();
+    return;
+  }
+}
+
+function compactArgs(raw: string): string {
+  if (!raw) return "";
+  try {
+    const obj = JSON.parse(raw) as Record<string, unknown>;
+    const entries = Object.entries(obj).slice(0, 2);
+    if (!entries.length) return "{}";
+    return entries
+      .map(([k, v]) => `${k}=${typeof v === "string" ? `"${v}"` : String(v)}`)
+      .join(", ");
+  } catch {
+    return raw.substring(0, 80);
+  }
+}
+
+function prettyPayload(raw: string): string {
+  const text = (raw || "").trim();
+  if (!text) return "{}";
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2);
+  } catch {
+    return text;
+  }
 }
 
 /**
@@ -154,6 +345,80 @@ export function setupInput(
       handlers.showLoading(false);
       clearMessagesUI(shadowRoot);
       await clearPersistedMessages();
+      return;
+    }
+
+    if (message.toLowerCase().startsWith("/command")) {
+      const commandText = message.slice("/command".length).trim();
+      handlers.addMessage(message, "user");
+      input.value = "";
+
+      if (!commandText) {
+        handlers.addMessage(
+          'Usage: /command <action>. Example: /command goto docs.google.com',
+          "error",
+        );
+        return;
+      }
+
+      const parsed = parseCommand(commandText);
+      if (parsed.kind === "screenshot") {
+        const shot = await new Promise<ApiResponse>((resolve) => {
+          chrome.runtime.sendMessage({ type: "TAKE_SCREENSHOT" }, (response) => {
+            if (chrome.runtime.lastError) {
+              resolve({
+                success: false,
+                error: chrome.runtime.lastError.message || "Screenshot failed",
+              });
+            } else {
+              resolve(response || { success: false, error: "No response from background" });
+            }
+          });
+        });
+
+        if (!shot.success) {
+          handlers.addMessage(`Command failed: ${shot.error || "unknown error"}`, "error");
+          return;
+        }
+        handlers.addMessage("Command OK: Screenshot captured", "assistant");
+        return;
+      }
+
+      const actionResponse = await new Promise<ApiResponse>((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: "EXECUTE_ACTION", payload: parsed.action },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              resolve({
+                success: false,
+                error: chrome.runtime.lastError.message || "Command failed",
+              });
+            } else {
+              resolve(response || { success: false, error: "No response from tab" });
+            }
+          },
+        );
+      });
+
+      if (!actionResponse.success) {
+        handlers.addMessage(
+          `Command failed: ${actionResponse.error || "unknown error"}`,
+          "error",
+        );
+        return;
+      }
+
+      const actionData = (actionResponse.data as Record<string, unknown>) || {};
+      const wasSuccess = actionData.success !== false;
+      if (!wasSuccess) {
+        handlers.addMessage(
+          `Command failed: ${String(actionData.error || "unknown error")}`,
+          "error",
+        );
+        return;
+      }
+
+      handlers.addMessage(`Command OK: ${summarizeResult(actionData)}`, "assistant");
       return;
     }
 

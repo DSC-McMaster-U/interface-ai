@@ -1,19 +1,21 @@
-/**
+﻿/**
  * Test Panel - DOM automation UI
  * Same functionality as action-execution/test-extension popup.
- * Sends commands via chrome.runtime to background → automation.js.
+ * Sends commands via chrome.runtime to background -> content/actions.ts.
  */
+
+import type { ActionType } from "./actions";
+import { parseCommand, summarizeResult } from "./command-parser";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ActionResult = Record<string, any>;
 
-function sendCommand(
-  action: string,
-  params: Record<string, unknown>,
+function sendAction(
+  action: ActionType,
   callback: (result: ActionResult) => void,
 ): void {
   chrome.runtime.sendMessage(
-    { target: "background", action, params },
+    { type: "EXECUTE_ACTION", payload: action },
     (result: ActionResult) => {
       if (chrome.runtime.lastError) {
         callback({ success: false, error: chrome.runtime.lastError?.message });
@@ -22,6 +24,16 @@ function sendCommand(
       }
     },
   );
+}
+
+function takeScreenshot(callback: (result: ActionResult) => void): void {
+  chrome.runtime.sendMessage({ type: "TAKE_SCREENSHOT" }, (result: ActionResult) => {
+    if (chrome.runtime.lastError) {
+      callback({ success: false, error: chrome.runtime.lastError?.message });
+      return;
+    }
+    callback(result || { success: false, error: "No response" });
+  });
 }
 
 export const TEST_PANEL_STYLES = `
@@ -182,85 +194,6 @@ export const TEST_PANEL_STYLES = `
   }
 `;
 
-interface ParsedCommand {
-  action: string;
-  params: Record<string, unknown>;
-}
-
-function parseCommand(raw: string): ParsedCommand {
-  const parts = raw.trim().split(/\s+/);
-  const cmd = parts[0]?.toLowerCase() ?? "";
-
-  switch (cmd) {
-    case "click": {
-      const x = parseFloat(parts[1] ?? "");
-      const y = parseFloat(parts[2] ?? "");
-      if (!isNaN(x) && !isNaN(y))
-        return { action: "clickAtCoordinate", params: { x, y } };
-      return { action: "clickByName", params: { name: parts.slice(1).join(" ") } };
-    }
-    case "fill":
-      return {
-        action: "fillInput",
-        params: { identifier: parts[1], value: parts.slice(2).join(" ") },
-      };
-    case "type":
-      return { action: "typeText", params: { text: parts.slice(1).join(" ") } };
-    case "enter":
-      return { action: "pressEnter", params: {} };
-    case "key":
-      return { action: "pressKey", params: { key: parts.slice(1).join(" ") } };
-    case "scroll": {
-      const dir = (parts[1] || "down").toLowerCase();
-      const px = parseInt(parts[2] ?? "", 10) || undefined;
-      if (dir === "up") return { action: "scrollUp", params: { pixels: px } };
-      if (dir === "top") return { action: "scrollToTop", params: {} };
-      if (dir === "bottom")
-        return { action: "scrollToBottom", params: {} };
-      return { action: "scrollDown", params: { pixels: px } };
-    }
-    case "goto":
-    case "go":
-      return { action: "goto", params: { url: parts.slice(1).join(" ") } };
-    case "back":
-      return { action: "goBack", params: {} };
-    case "forward":
-      return { action: "goForward", params: {} };
-    case "status":
-      return { action: "getPageStatus", params: {} };
-    case "screenshot":
-      return { action: "screenshot", params: {} };
-    case "result":
-    case "first":
-      return { action: "clickFirstSearchResult", params: {} };
-    default:
-      return { action: "clickByName", params: { name: raw.trim() } };
-  }
-}
-
-function summarize(obj: ActionResult): string {
-  if ("dataUrl" in obj && obj.dataUrl) return "Screenshot captured";
-  if ("title" in obj && obj.title && "url" in obj && obj.url && "scroll" in obj) {
-    const parts = ['Page: "' + obj.title + '"'];
-    const nLinks = (obj.links as unknown[] | undefined)?.length ?? 0;
-    const nBtns = (obj.buttons as unknown[] | undefined)?.length ?? 0;
-    parts.push(`${nLinks} links`, `${nBtns} buttons`);
-    const fillable = (obj.fillableFields as unknown[] | undefined)?.length;
-    if (fillable) parts.push(`${fillable} fillable`);
-    const search = (obj.searchBoxes as unknown[] | undefined)?.length;
-    if (search) parts.push(`${search} search`);
-    return parts.join(" | ");
-  }
-  if ("title" in obj && obj.title && "url" in obj && obj.url)
-    return 'Page: "' + obj.title + '"';
-  if ("text" in obj && obj.text) return obj.text as string;
-  if ("url" in obj && obj.url) return obj.url as string;
-  if ("name" in obj && obj.name) return "Field: " + obj.name;
-  if ("scrolledBy" in obj && obj.scrolledBy != null)
-    return "Scrolled " + obj.scrolledBy + "px";
-  return JSON.stringify(obj).substring(0, 120);
-}
-
 function escHtml(str: string): string {
   const d = document.createElement("div");
   d.textContent = str;
@@ -288,7 +221,7 @@ export function setupTestPanel(shadowRoot: ShadowRoot | null): void {
       '</div><div class="result ' +
       (isOk ? "ok" : "err") +
       '">' +
-      (isOk ? "✓ " : "✗ ") +
+      (isOk ? "OK " : "ERR ") +
       escHtml(text) +
       "</div>";
     logArea.appendChild(entry);
@@ -303,14 +236,23 @@ export function setupTestPanel(shadowRoot: ShadowRoot | null): void {
     if (cmdInput) cmdInput.value = "";
     cmdInput?.focus();
 
-    sendCommand(parsed.action, parsed.params, (result) => {
+    if (parsed.kind === "screenshot") {
+      takeScreenshot((result) => {
+        const isOk = result.success !== false;
+        const text = result.error || summarizeResult(result);
+        addLog(raw, text, isOk);
+      });
+      return;
+    }
+
+    sendAction(parsed.action, (result) => {
       const isOk = result.success !== false;
-      const text = result.error || summarize(result);
+      const text = result.error || summarizeResult(result);
       addLog(raw, text, isOk);
-      if (parsed.action === "getPageStatus" && result.success !== false) {
+      if (parsed.action.type === "getPageStatus" && result.success !== false) {
         console.log("[InterfaceAI] Page status (full hashmap):", result);
       }
-      console.log("[InterfaceAI] Command:", parsed.action, parsed.params);
+      console.log("[InterfaceAI] Command:", parsed.action.type, parsed.action);
       console.log("[InterfaceAI] Result:", result);
     });
   }
@@ -339,15 +281,14 @@ export function setupTestPanel(shadowRoot: ShadowRoot | null): void {
     });
   });
 
-  // Connection check (ping via automation.js)
   if (statusDot) {
-    sendCommand("ping", {}, (result) => {
+    sendAction({ type: "ping" }, (result) => {
       if (result.success !== false) {
         statusDot.className = "test-status-dot connected";
         statusDot.title = "Connected";
       } else {
         statusDot.className = "test-status-dot disconnected";
-        statusDot.title = "Not connected — refresh the tab";
+        statusDot.title = "Not connected - refresh the tab";
       }
     });
   }

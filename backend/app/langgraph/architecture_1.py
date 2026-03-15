@@ -89,6 +89,16 @@ def run_architecture_1(
         """Type text into active element."""
         return approved_send("typeText", {"text": text})
 
+    @tool
+    def selectOption(identifier: str, value: str) -> dict[str, Any]:
+        """Select a dropdown option by field identifier and option text/value."""
+        return approved_send("selectOption", {"identifier": identifier, "value": value})
+
+    @tool
+    def clickFileInput(identifier: str) -> dict[str, Any]:
+        """Open file picker by file input identifier."""
+        return approved_send("clickFileInput", {"identifier": identifier})
+
     tools = [
         goto,
         clickByName,
@@ -104,6 +114,8 @@ def run_architecture_1(
         clickFirstSearchResult,
         pressKey,
         typeText,
+        selectOption,
+        clickFileInput,
     ]
 
     model = ChatGoogleGenerativeAI(
@@ -121,6 +133,7 @@ def run_architecture_1(
             content=(
                 "You are a browser automation agent. Use tools to complete the goal. "
                 "Call one tool at a time. If a tool fails, you must try a different approach. "
+                "Use getPageStatus often; it includes dropdowns (selects) and file inputs when present. "
                 "Do not say done until completion is verified from getPageStatus."
                 "Always continue going and calling tools until the goal is complete, dont just stop midway. Be persistent and try different approaches if you fail."
             )

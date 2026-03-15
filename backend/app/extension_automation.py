@@ -1,6 +1,7 @@
 import asyncio
 import json
 import threading
+import time
 from typing import Any
 
 import websockets
@@ -11,6 +12,18 @@ _connected: Any = None
 _pending: dict[int, asyncio.Future] = {}
 _cmd_id = 0
 _loop: asyncio.AbstractEventLoop | None = None
+
+RECONNECT_WAIT_SECONDS = 12.0
+COMMAND_TIMEOUT_SECONDS = 20.0
+
+
+async def _wait_for_connection(timeout_seconds: float = RECONNECT_WAIT_SECONDS) -> bool:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if _connected is not None:
+            return True
+        await asyncio.sleep(0.2)
+    return _connected is not None
 
 
 async def _handle_client(websocket):
@@ -46,8 +59,8 @@ async def _send_event(event: dict[str, Any]) -> bool:
 async def _send_command(action: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
     global _cmd_id
 
-    if _connected is None:
-        return {"success": False, "error": "No browser connected"}
+    if _connected is None and not await _wait_for_connection():
+        return {"success": False, "error": "No browser connected after reconnect wait"}
 
     _cmd_id += 1
     request_id = _cmd_id
@@ -55,10 +68,20 @@ async def _send_command(action: str, params: dict[str, Any] | None = None) -> di
     _pending[request_id] = future
 
     payload = {"id": request_id, "action": action, "params": params or {}}
-    await _connected.send(json.dumps(payload))
+    try:
+        await _connected.send(json.dumps(payload))
+    except Exception:
+        if not await _wait_for_connection():
+            _pending.pop(request_id, None)
+            return {"success": False, "error": "No browser connected after reconnect wait"}
+        try:
+            await _connected.send(json.dumps(payload))
+        except Exception as exc:
+            _pending.pop(request_id, None)
+            return {"success": False, "error": str(exc)}
 
     try:
-        return await asyncio.wait_for(future, timeout=15)
+        return await asyncio.wait_for(future, timeout=COMMAND_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
         _pending.pop(request_id, None)
         return {"success": False, "error": "Timeout"}

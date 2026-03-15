@@ -1,25 +1,93 @@
-/**
+﻿/**
  * Content Script - Main entry point
- * Injects a glassmorphic overlay UI into any webpage using Shadow DOM
+ * Injects overlay and provides a WebSocket bridge for backend agent commands.
  */
 
 import { InterfaceAIOverlay } from "./content/overlay";
 import { executeAction } from "./content/actions";
 import type { ExecuteActionMessage } from "./content/types";
 
-// Initialize the overlay when the content script loads
 const overlay = new InterfaceAIOverlay();
 
-window.addEventListener("message", (event: MessageEvent) => {
-  const data = event.data as { source?: string; type?: string; message?: string };
-  if (!data || data.source !== "interface-ai") return;
-  if (data.type === "AGENT_LOG") {
-    overlay.appendAgentLog(data.message || "");
-  }
-});
+let ws: WebSocket | null = null;
+let reconnectDelayMs = 2000;
 
-// Listen for messages from background script toggle visibility command
-// Can add other Commands here from Manifest.json
+function sendWsMessage(payload: Record<string, unknown>): void {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify(payload));
+}
+
+function handleWsMessage(raw: string): void {
+  let msg: Record<string, unknown>;
+  try {
+    msg = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return;
+  }
+
+  if (msg.type === "agent_log") {
+    overlay.appendAgentLog(String(msg.message || ""));
+    return;
+  }
+
+  const id = Number(msg.id);
+  const action = String(msg.action || "");
+  const params = (msg.params || {}) as Record<string, unknown>;
+
+  if (!action || !Number.isFinite(id)) {
+    return;
+  }
+
+  let result: Record<string, unknown>;
+  try {
+    result = executeAction({
+      type: action,
+      ...(params || {}),
+    } as never) as Record<string, unknown>;
+  } catch (error) {
+    result = {
+      success: false,
+      error: error instanceof Error ? error.message : "Action failed",
+    };
+  }
+
+  sendWsMessage({ type: "result", id, result });
+}
+
+function connectAgentWebSocket(): void {
+  try {
+    ws = new WebSocket("ws://localhost:7878");
+
+    ws.onopen = () => {
+      reconnectDelayMs = 2000;
+      sendWsMessage({
+        type: "connected",
+        title: document.title,
+        url: window.location.href,
+      });
+    };
+
+    ws.onmessage = (event) => {
+      handleWsMessage(String(event.data || ""));
+    };
+
+    ws.onclose = () => {
+      ws = null;
+      window.setTimeout(connectAgentWebSocket, reconnectDelayMs);
+      reconnectDelayMs = Math.min(reconnectDelayMs * 2, 10000);
+    };
+
+    ws.onerror = () => {
+      // onclose handles reconnect
+    };
+  } catch {
+    window.setTimeout(connectAgentWebSocket, reconnectDelayMs);
+    reconnectDelayMs = Math.min(reconnectDelayMs * 2, 10000);
+  }
+}
+
+connectAgentWebSocket();
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "TOGGLE_OVERLAY") {
     overlay.toggle();
