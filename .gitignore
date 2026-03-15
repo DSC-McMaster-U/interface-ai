@@ -7,3 +7,4 @@ vision-ai/tests/output-images/*
 */venv
 */node_modules/*
 action-execution/test-extension/node_modules/
+.local-pr-backup/
