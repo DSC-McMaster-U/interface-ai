@@ -2,7 +2,7 @@
  * UI interaction handlers (messages, loading, input)
  */
 
-import type { ApiRequestMessage, ApiResponse } from "./types";
+import type { ApiResponse } from "./types";
 import { parseCommand, summarizeResult } from "./command-parser";
 
 type ChatMessage = {
@@ -301,28 +301,6 @@ export function showLoading(
 }
 
 /**
- * Send a message to the background script
- */
-export function sendToBackground(
-  message: ApiRequestMessage,
-): Promise<ApiResponse> {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage(message, (response: ApiResponse) => {
-      if (chrome.runtime.lastError) {
-        resolve({
-          success: false,
-          error: chrome.runtime.lastError.message || "Communication error",
-        });
-      } else {
-        resolve(
-          response || { success: false, error: "No response from background" },
-        );
-      }
-    });
-  });
-}
-
-/**
  * Setup input field and send button
  */
 export function setupInput(
@@ -330,7 +308,6 @@ export function setupInput(
   handlers: {
     addMessage: (text: string, type: "user" | "assistant" | "error") => void;
     showLoading: (show: boolean) => void;
-    sendToBackground: (message: ApiRequestMessage) => Promise<ApiResponse>;
   },
 ): void {
   const input = shadowRoot?.getElementById("message-input") as HTMLInputElement;

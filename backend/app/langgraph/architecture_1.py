@@ -146,7 +146,6 @@ def run_architecture_1(
     last_agent_text = ""
 
     while remaining_attempts > 0 and not stop_event.is_set():
-        used_steps = 0
         latest_messages = messages
 
         stream_succeeded = False
@@ -154,7 +153,6 @@ def run_architecture_1(
         for stream_attempt in range(3):
             try:
                 for i, state in enumerate(agent.stream({"messages": messages}, stream_mode="values"), start=1):
-                    used_steps = i
                     latest_messages = state.get("messages") or latest_messages
                     last = latest_messages[-1] if latest_messages else None
                     if isinstance(last, AIMessage):

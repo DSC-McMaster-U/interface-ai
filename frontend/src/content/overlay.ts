@@ -10,7 +10,6 @@ import { setupResizing } from "./resizing";
 import {
   addMessage,
   showLoading,
-  sendToBackground,
   setupInput,
   setupButtons,
   restoreMessages,
@@ -23,7 +22,7 @@ import {
   updateUserSettings,
 } from "./settings";
 import { TEST_PANEL_STYLES, setupTestPanel } from "./test-panel";
-import type { ApiRequestMessage, UserSettings } from "./types";
+import type { UserSettings } from "./types";
 
 export class InterfaceAIOverlay {
   private shadowRoot: ShadowRoot | null = null;
@@ -112,8 +111,6 @@ export class InterfaceAIOverlay {
     setupInput(this.shadowRoot, {
       addMessage: (text, type) => addMessage(this.shadowRoot, text, type),
       showLoading: (show) => showLoading(this.shadowRoot, show),
-      sendToBackground: (message: ApiRequestMessage) =>
-        sendToBackground(message),
     });
 
     // Keyboard shortcuts - listen for chrome.commands
