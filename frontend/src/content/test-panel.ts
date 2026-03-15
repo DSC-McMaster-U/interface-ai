@@ -27,13 +27,16 @@ function sendAction(
 }
 
 function takeScreenshot(callback: (result: ActionResult) => void): void {
-  chrome.runtime.sendMessage({ type: "TAKE_SCREENSHOT" }, (result: ActionResult) => {
-    if (chrome.runtime.lastError) {
-      callback({ success: false, error: chrome.runtime.lastError?.message });
-      return;
-    }
-    callback(result || { success: false, error: "No response" });
-  });
+  chrome.runtime.sendMessage(
+    { type: "TAKE_SCREENSHOT" },
+    (result: ActionResult) => {
+      if (chrome.runtime.lastError) {
+        callback({ success: false, error: chrome.runtime.lastError?.message });
+        return;
+      }
+      callback(result || { success: false, error: "No response" });
+    },
+  );
 }
 
 export const TEST_PANEL_STYLES = `
@@ -202,7 +205,9 @@ function escHtml(str: string): string {
 
 export function setupTestPanel(shadowRoot: ShadowRoot | null): void {
   const logArea = shadowRoot?.getElementById("test-log");
-  const cmdInput = shadowRoot?.getElementById("test-cmd-input") as HTMLInputElement;
+  const cmdInput = shadowRoot?.getElementById(
+    "test-cmd-input",
+  ) as HTMLInputElement;
   const runBtn = shadowRoot?.getElementById("test-run-btn");
   const statusDot = shadowRoot?.getElementById("test-status-dot");
   let hasEntries = false;

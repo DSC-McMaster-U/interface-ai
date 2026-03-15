@@ -484,8 +484,19 @@ export interface PageStatus {
     accept: string | null;
     multiple: boolean;
   }[];
-  sliders: { id: string | null; name: string; min: number; max: number; value: number }[];
-  checkboxes: { id: string | null; name: string; checked: boolean; label: string | null }[];
+  sliders: {
+    id: string | null;
+    name: string;
+    min: number;
+    max: number;
+    value: number;
+  }[];
+  checkboxes: {
+    id: string | null;
+    name: string;
+    checked: boolean;
+    label: string | null;
+  }[];
   forms: { id: string | null; action: string | null }[];
   landmarks: { type: string; text: string }[];
   iframes: { src: string }[];
@@ -540,7 +551,9 @@ export function getPageStatus(): PageStatus {
         i.type.toLowerCase(),
       ) || i.type.toLowerCase() === "textarea",
   );
-  const selects = Array.from(document.querySelectorAll<HTMLSelectElement>("select"))
+  const selects = Array.from(
+    document.querySelectorAll<HTMLSelectElement>("select"),
+  )
     .filter((s) => isVisible(s))
     .slice(0, 15)
     .map((s) => ({
@@ -647,7 +660,9 @@ export function getPageStatus(): PageStatus {
       .slice(0, 20)
       .map((p) => (p.textContent || "").trim().substring(0, 150))
       .filter(Boolean),
-    sliders: Array.from(document.querySelectorAll<HTMLInputElement>('input[type="range"]'))
+    sliders: Array.from(
+      document.querySelectorAll<HTMLInputElement>('input[type="range"]'),
+    )
       .filter((r) => isVisible(r))
       .slice(0, 15)
       .map((r) => ({
@@ -657,13 +672,17 @@ export function getPageStatus(): PageStatus {
         max: parseFloat(r.max) || 100,
         value: parseFloat(r.value) || 0,
       })),
-    checkboxes: Array.from(document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'))
+    checkboxes: Array.from(
+      document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+    )
       .filter((c) => isVisible(c))
       .slice(0, 25)
       .map((c) => {
         let label: string | null = null;
         if (c.id) {
-          const forLabel = document.querySelector(`label[for="${c.id.replace(/"/g, '\\"')}"]`);
+          const forLabel = document.querySelector(
+            `label[for="${c.id.replace(/"/g, '\\"')}"]`,
+          );
           if (forLabel) label = trim(forLabel.textContent, 80) || null;
         }
         if (!label && c.parentElement?.tagName === "LABEL") {
@@ -694,7 +713,9 @@ export function getPageStatus(): PageStatus {
         type: el.getAttribute("role") || el.tagName.toLowerCase(),
         text: trim(el.textContent, 80),
       })),
-    iframes: Array.from(document.querySelectorAll<HTMLIFrameElement>("iframe[src]"))
+    iframes: Array.from(
+      document.querySelectorAll<HTMLIFrameElement>("iframe[src]"),
+    )
       .slice(0, 8)
       .map((f) => ({
         src: f.src.substring(0, 140),

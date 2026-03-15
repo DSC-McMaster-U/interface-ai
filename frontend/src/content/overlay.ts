@@ -61,7 +61,8 @@ export class InterfaceAIOverlay {
 
     // Inject styles into Shadow DOM
     const styleElement = document.createElement("style");
-    styleElement.textContent = OVERLAY_STYLES + SETTINGS_STYLES + TEST_PANEL_STYLES;
+    styleElement.textContent =
+      OVERLAY_STYLES + SETTINGS_STYLES + TEST_PANEL_STYLES;
     this.shadowRoot.appendChild(styleElement);
 
     // Inject HTML into Shadow DOM
@@ -165,7 +166,9 @@ export class InterfaceAIOverlay {
 
     // Focus command input
     setTimeout(() => {
-      (this.shadowRoot?.getElementById("test-cmd-input") as HTMLInputElement)?.focus();
+      (
+        this.shadowRoot?.getElementById("test-cmd-input") as HTMLInputElement
+      )?.focus();
     }, 50);
   }
 

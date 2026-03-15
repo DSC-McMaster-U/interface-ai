@@ -4,7 +4,11 @@ from flask import Flask, Response, jsonify, request, stream_with_context
 from flask_cors import CORS
 
 from app.agent_execution import session
-from app.extension_automation import is_server_running, send_command_sync, start_websocket_server
+from app.extension_automation import (
+    is_server_running,
+    send_command_sync,
+    start_websocket_server,
+)
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -19,7 +23,9 @@ def health():
 def api_extension_health():
     running = is_server_running()
     status = "ok" if running else "error"
-    message = "Extension WS server running" if running else "Extension WS server not started"
+    message = (
+        "Extension WS server running" if running else "Extension WS server not started"
+    )
     return jsonify({"status": status, "message": message}), 200 if running else 503
 
 
@@ -75,9 +81,11 @@ def relay():
 
     if msg and (session.is_running() or session.is_waiting_for_approval()):
         session.submit_user_message(msg)
-        return _sse([{"message": "Message delivered to agent session."}, {"done": True}])
+        return _sse(
+            [{"message": "Message delivered to agent session."}, {"done": True}]
+        )
 
-    return _sse([{"message": f"Done! The task: \"{msg}\" is complete."}, {"done": True}])
+    return _sse([{"message": f'Done! The task: "{msg}" is complete.'}, {"done": True}])
 
 
 def _sse(items):

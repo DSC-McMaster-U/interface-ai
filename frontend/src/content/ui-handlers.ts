@@ -56,7 +56,9 @@ function clearMessagesUI(shadowRoot: ShadowRoot | null): void {
   pendingToolCards.length = 0;
 }
 
-export async function restoreMessages(shadowRoot: ShadowRoot | null): Promise<void> {
+export async function restoreMessages(
+  shadowRoot: ShadowRoot | null,
+): Promise<void> {
   const container = shadowRoot?.getElementById("messages-container");
   if (!container) return;
 
@@ -134,7 +136,9 @@ function renderToolEventMessage(container: HTMLElement, text: string): boolean {
 function parseToolLine(
   line: string,
 ): { stage: ToolStage; action: string; rawPayload: string } | null {
-  const m = line.match(/^\[tool:(call|approved|auto-approved|result|rejected)\]\s+(\S+)\s*(.*)$/);
+  const m = line.match(
+    /^\[tool:(call|approved|auto-approved|result|rejected)\]\s+(\S+)\s*(.*)$/,
+  );
   if (!m) return null;
   const [, stage, action, payload] = m;
   return {
@@ -144,7 +148,10 @@ function parseToolLine(
   };
 }
 
-function findLatestPending(action: string, rawPayload: string): ToolCard | undefined {
+function findLatestPending(
+  action: string,
+  rawPayload: string,
+): ToolCard | undefined {
   const sameAction = [...pendingToolCards]
     .reverse()
     .find((c) => c.action === action && c.status !== "done");
@@ -214,7 +221,11 @@ function createToolCard(action: string, rawParams: string): ToolCard {
   };
 }
 
-function applyToolUpdate(card: ToolCard, stage: ToolStage, rawPayload: string): void {
+function applyToolUpdate(
+  card: ToolCard,
+  stage: ToolStage,
+  rawPayload: string,
+): void {
   if (stage === "auto-approved") {
     card.status = "approved";
     card.meta.textContent = "auto-approved";
@@ -230,7 +241,9 @@ function applyToolUpdate(card: ToolCard, stage: ToolStage, rawPayload: string): 
   if (stage === "rejected") {
     card.status = "rejected";
     card.meta.textContent = "rejected";
-    card.output.textContent = rawPayload ? prettyPayload(rawPayload) : "Rejected by user.";
+    card.output.textContent = rawPayload
+      ? prettyPayload(rawPayload)
+      : "Rejected by user.";
     card.root.dataset.status = "rejected";
     card.root.open = true;
     return;
@@ -238,10 +251,13 @@ function applyToolUpdate(card: ToolCard, stage: ToolStage, rawPayload: string): 
   if (stage === "result") {
     const wasApproved = card.status === "approved";
     card.status = "done";
-    card.meta.textContent = wasApproved ? `${card.meta.textContent} -> done` : "done";
+    card.meta.textContent = wasApproved
+      ? `${card.meta.textContent} -> done`
+      : "done";
     card.output.textContent = prettyPayload(rawPayload || "{}");
     card.root.dataset.status = "done";
-    card.main.textContent = `${card.action} ${compactArgs(card.paramsRaw)}`.trim();
+    card.main.textContent =
+      `${card.action} ${compactArgs(card.paramsRaw)}`.trim();
     return;
   }
 }
@@ -332,7 +348,7 @@ export function setupInput(
 
       if (!commandText) {
         handlers.addMessage(
-          'Usage: /command <action>. Example: /command goto docs.google.com',
+          "Usage: /command <action>. Example: /command goto docs.google.com",
           "error",
         );
         return;
@@ -341,20 +357,32 @@ export function setupInput(
       const parsed = parseCommand(commandText);
       if (parsed.kind === "screenshot") {
         const shot = await new Promise<ApiResponse>((resolve) => {
-          chrome.runtime.sendMessage({ type: "TAKE_SCREENSHOT" }, (response) => {
-            if (chrome.runtime.lastError) {
-              resolve({
-                success: false,
-                error: chrome.runtime.lastError.message || "Screenshot failed",
-              });
-            } else {
-              resolve(response || { success: false, error: "No response from background" });
-            }
-          });
+          chrome.runtime.sendMessage(
+            { type: "TAKE_SCREENSHOT" },
+            (response) => {
+              if (chrome.runtime.lastError) {
+                resolve({
+                  success: false,
+                  error:
+                    chrome.runtime.lastError.message || "Screenshot failed",
+                });
+              } else {
+                resolve(
+                  response || {
+                    success: false,
+                    error: "No response from background",
+                  },
+                );
+              }
+            },
+          );
         });
 
         if (!shot.success) {
-          handlers.addMessage(`Command failed: ${shot.error || "unknown error"}`, "error");
+          handlers.addMessage(
+            `Command failed: ${shot.error || "unknown error"}`,
+            "error",
+          );
           return;
         }
         handlers.addMessage("Command OK: Screenshot captured", "assistant");
@@ -371,7 +399,9 @@ export function setupInput(
                 error: chrome.runtime.lastError.message || "Command failed",
               });
             } else {
-              resolve(response || { success: false, error: "No response from tab" });
+              resolve(
+                response || { success: false, error: "No response from tab" },
+              );
             }
           },
         );
@@ -395,7 +425,10 @@ export function setupInput(
         return;
       }
 
-      handlers.addMessage(`Command OK: ${summarizeResult(actionData)}`, "assistant");
+      handlers.addMessage(
+        `Command OK: ${summarizeResult(actionData)}`,
+        "assistant",
+      );
       return;
     }
 
@@ -406,10 +439,12 @@ export function setupInput(
     try {
       const BACKEND_API = "http://localhost:5000";
       const url = `${BACKEND_API}/api/relay`;
-      
+
       // Use fetch with streaming (handles CORS better than EventSource)
-      const response = await fetch(`${url}?message=${encodeURIComponent(message)}`);
-      
+      const response = await fetch(
+        `${url}?message=${encodeURIComponent(message)}`,
+      );
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -425,12 +460,12 @@ export function setupInput(
       // Read the stream
       while (true) {
         const { done, value } = await reader.read();
-        
+
         if (done) break;
 
         // Decode the chunk
         const chunk = decoder.decode(value, { stream: true });
-        
+
         // Parse SSE lines (format: "data: {...}\n\n")
         const lines = chunk.split("\n");
         for (const line of lines) {
@@ -438,7 +473,7 @@ export function setupInput(
             const jsonStr = line.slice(6); // Remove "data: " prefix
             try {
               const data = JSON.parse(jsonStr);
-              
+
               // Remove loading on first message
               if (firstMessage) {
                 handlers.showLoading(false);
@@ -457,7 +492,6 @@ export function setupInput(
 
       // Make sure loading is hidden
       handlers.showLoading(false);
-
     } catch (error) {
       handlers.showLoading(false);
       handlers.addMessage(

@@ -36,7 +36,9 @@ async def _handle_client(websocket):
             data = json.loads(message)
 
             if data.get("type") == "connected":
-                print(f"[ExtensionAutomation] Tab: {data.get('title', '')} - {data.get('url', '')}")
+                print(
+                    f"[ExtensionAutomation] Tab: {data.get('title', '')} - {data.get('url', '')}"
+                )
                 continue
 
             if data.get("type") == "result":
@@ -56,7 +58,9 @@ async def _send_event(event: dict[str, Any]) -> bool:
     return True
 
 
-async def _send_command(action: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _send_command(
+    action: str, params: dict[str, Any] | None = None
+) -> dict[str, Any]:
     global _cmd_id
 
     if _connected is None and not await _wait_for_connection():
@@ -73,7 +77,10 @@ async def _send_command(action: str, params: dict[str, Any] | None = None) -> di
     except Exception:
         if not await _wait_for_connection():
             _pending.pop(request_id, None)
-            return {"success": False, "error": "No browser connected after reconnect wait"}
+            return {
+                "success": False,
+                "error": "No browser connected after reconnect wait",
+            }
         try:
             await _connected.send(json.dumps(payload))
         except Exception as exc:
@@ -103,7 +110,9 @@ def send_agent_log(message: str) -> dict[str, Any]:
     return {"success": sent}
 
 
-def send_command_sync(action: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+def send_command_sync(
+    action: str, params: dict[str, Any] | None = None
+) -> dict[str, Any]:
     if _loop is None:
         return {"success": False, "error": "WebSocket server not running"}
 
@@ -119,7 +128,9 @@ async def _run_server() -> None:
     _loop = asyncio.get_running_loop()
 
     async with websockets.serve(_handle_client, "0.0.0.0", EXTENSION_WS_PORT):
-        print(f"[ExtensionAutomation] WebSocket server on ws://0.0.0.0:{EXTENSION_WS_PORT}")
+        print(
+            f"[ExtensionAutomation] WebSocket server on ws://0.0.0.0:{EXTENSION_WS_PORT}"
+        )
         await asyncio.Future()
 
 

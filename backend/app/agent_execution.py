@@ -57,7 +57,9 @@ class AgentSession:
         with self._lock:
             if self.is_running():
                 if not restart_if_running:
-                    self._emit("An agent session is already running. Type STOP to cancel.")
+                    self._emit(
+                        "An agent session is already running. Type STOP to cancel."
+                    )
                     return
                 self._emit("Stopping current session and starting new goal...")
                 self.stop()
@@ -76,7 +78,9 @@ class AgentSession:
                             daemon=True,
                         )
                         watcher.start()
-                self._emit("Current session is still stopping. New goal queued and will auto-start.")
+                self._emit(
+                    "Current session is still stopping. New goal queued and will auto-start."
+                )
                 return
 
         with self._lock:
@@ -144,7 +148,9 @@ class AgentSession:
 
     def _approve(self, action: str, params: dict[str, Any]) -> bool:
         if not self._require_approval:
-            self._emit(f"[tool:auto-approved] {action} {json.dumps(params, ensure_ascii=True)}")
+            self._emit(
+                f"[tool:auto-approved] {action} {json.dumps(params, ensure_ascii=True)}"
+            )
             return True
 
         self._pending_action = ProposedAction(action, params)
@@ -162,12 +168,16 @@ class AgentSession:
 
         approved = self._approval_decision == "YES"
         if approved:
-            self._emit(f"[tool:approved] {action} {json.dumps(params, ensure_ascii=True)}")
+            self._emit(
+                f"[tool:approved] {action} {json.dumps(params, ensure_ascii=True)}"
+            )
         if not approved and self._feedback:
             self._emit(f"Feedback received: {self._feedback}")
         return approved
 
-    def _approved_send(self, action: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _approved_send(
+        self, action: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         payload = params or {}
 
         if self._stop.is_set():
@@ -176,7 +186,11 @@ class AgentSession:
         self._emit(f"[tool:call] {action} {json.dumps(payload, ensure_ascii=True)}")
         if not self._approve(action, payload):
             self._emit(f"[tool:rejected] {action}")
-            return {"success": False, "error": "user_rejected", "feedback": self._feedback}
+            return {
+                "success": False,
+                "error": "user_rejected",
+                "feedback": self._feedback,
+            }
 
         result = send_command_sync(action, payload)
         if not result.get("success", False):

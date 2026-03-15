@@ -7,7 +7,11 @@ from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
 
-from app.langgraph.utilities import content_to_text, invoke_with_retry, parse_verdict_json
+from app.langgraph.utilities import (
+    content_to_text,
+    invoke_with_retry,
+    parse_verdict_json,
+)
 
 
 def run_architecture_1(
@@ -152,7 +156,9 @@ def run_architecture_1(
         stream_error: Exception | None = None
         for stream_attempt in range(3):
             try:
-                for i, state in enumerate(agent.stream({"messages": messages}, stream_mode="values"), start=1):
+                for i, state in enumerate(
+                    agent.stream({"messages": messages}, stream_mode="values"), start=1
+                ):
                     latest_messages = state.get("messages") or latest_messages
                     last = latest_messages[-1] if latest_messages else None
                     if isinstance(last, AIMessage):
@@ -167,12 +173,16 @@ def run_architecture_1(
                 break
             except Exception as exc:
                 stream_error = exc
-                emit(f"Transient model error during planning: {type(exc).__name__}: {exc}")
+                emit(
+                    f"Transient model error during planning: {type(exc).__name__}: {exc}"
+                )
                 import time
 
                 time.sleep(0.75 * (stream_attempt + 1))
         if not stream_succeeded:
-            emit(f"Could not continue planning this pass: {type(stream_error).__name__}: {stream_error}")
+            emit(
+                f"Could not continue planning this pass: {type(stream_error).__name__}: {stream_error}"
+            )
 
         remaining_attempts -= 1
         messages = latest_messages
@@ -191,10 +201,12 @@ def run_architecture_1(
                         "Decide if the user's browser task is complete based only on goal and page status. "
                         "Be strict and conservative: done=true only when the goal outcome is clearly achieved. "
                         "Respond as strict JSON only: "
-                        "{\"done\": true|false, \"reason\": \"...\", \"next_step_hint\": \"...\"}."
+                        '{"done": true|false, "reason": "...", "next_step_hint": "..."}.'
                     )
                 ),
-                HumanMessage(content=f"Goal: {goal}\nLatest page status JSON: {verify_context}"),
+                HumanMessage(
+                    content=f"Goal: {goal}\nLatest page status JSON: {verify_context}"
+                ),
             ],
         )
         verdict_text = content_to_text(getattr(verdict, "content", ""))
