@@ -48,23 +48,222 @@ interface UserSettings {
   interests: string[];
 }
 
-/**
- * Fake backend storage for user settings
- * TODO fetch from an actual backend API
- */
-let userSettings: UserSettings = {
-  name: "John Doe",
-  gender: "Male",
-  address: "123 Main St, City, State",
-  email: "john.doe@example.com",
-  phone: "(123) 456-7890",
-  interests: ["Programming", "AI", "Web Development", "Machine Learning"],
-};
+interface AuthUser {
+  userId: string;
+  email: string;
+  name?: string;
+  picture?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Auth state (persisted in chrome.storage.local)
+// ---------------------------------------------------------------------------
+
+const AUTH_STORAGE_KEY = "interface_ai_auth_user";
+
+async function getStoredAuth(): Promise<AuthUser | null> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([AUTH_STORAGE_KEY], (result) => {
+      resolve((result?.[AUTH_STORAGE_KEY] as AuthUser) || null);
+    });
+  });
+}
+
+async function setStoredAuth(user: AuthUser | null): Promise<void> {
+  return new Promise((resolve) => {
+    if (user) {
+      chrome.storage.local.set({ [AUTH_STORAGE_KEY]: user }, () => resolve());
+    } else {
+      chrome.storage.local.remove(AUTH_STORAGE_KEY, () => resolve());
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Google OAuth sign-in
+// ---------------------------------------------------------------------------
+
+async function googleSignIn(): Promise<ApiResponse> {
+  try {
+    // Get an OAuth2 access token using chrome.identity
+    const token = await new Promise<string>((resolve, reject) => {
+      chrome.identity.getAuthToken({ interactive: true }, (result) => {
+        const tok = typeof result === "string" ? result : (result as unknown as string);
+        if (chrome.runtime.lastError || !tok) {
+          reject(new Error(chrome.runtime.lastError?.message || "No token"));
+        } else {
+          resolve(tok);
+        }
+      });
+    });
+
+    // Fetch Google profile from userinfo endpoint
+    const profileResp = await fetch(
+      "https://www.googleapis.com/oauth2/v2/userinfo",
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!profileResp.ok) {
+      return { success: false, error: `Google API error ${profileResp.status}` };
+    }
+    const googleProfile = (await profileResp.json()) as {
+      id: string;
+      email: string;
+      name?: string;
+      picture?: string;
+    };
+
+    // Verify with our backend & create/get profile
+    const backendResp = await fetch(`${BACKEND_API}/api/auth/google`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+
+    if (!backendResp.ok) {
+      const errData = await backendResp.json().catch(() => ({}));
+      return {
+        success: false,
+        error: (errData as Record<string, string>).error || "Backend auth failed",
+      };
+    }
+
+    const backendData = (await backendResp.json()) as {
+      user_id: string;
+      email: string;
+    };
+
+    const authUser: AuthUser = {
+      userId: backendData.user_id,
+      email: backendData.email || googleProfile.email,
+      name: googleProfile.name,
+      picture: googleProfile.picture,
+    };
+
+    await setStoredAuth(authUser);
+
+    return { success: true, data: authUser };
+  } catch (error) {
+    console.error("[InterfaceAI Background] Google Sign-In error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Sign-in failed",
+    };
+  }
+}
+
+async function googleSignOut(): Promise<ApiResponse> {
+  try {
+    // Revoke the cached token
+    const token = await new Promise<string | undefined>((resolve) => {
+      chrome.identity.getAuthToken({ interactive: false }, (result) => {
+        const tok = typeof result === "string" ? result : undefined;
+        resolve(tok);
+      });
+    });
+    if (token) {
+      await new Promise<void>((resolve) => {
+        chrome.identity.removeCachedAuthToken({ token }, () => resolve());
+      });
+    }
+    await setStoredAuth(null);
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Sign-out failed",
+    };
+  }
+}
+
+async function getAuthState(): Promise<ApiResponse> {
+  const user = await getStoredAuth();
+  return { success: true, data: user };
+}
+
+// ---------------------------------------------------------------------------
+// User settings (backed by PostgreSQL via backend API)
+// ---------------------------------------------------------------------------
+
+async function getUserSettings(): Promise<ApiResponse> {
+  const user = await getStoredAuth();
+  if (!user) {
+    return { success: false, error: "not_authenticated" };
+  }
+
+  try {
+    const resp = await fetch(
+      `${BACKEND_API}/api/profile?user_id=${encodeURIComponent(user.userId)}`,
+    );
+    if (!resp.ok) {
+      return { success: false, error: `HTTP ${resp.status}` };
+    }
+    const profile = (await resp.json()) as {
+      user_id: string;
+      preferences: Record<string, unknown>;
+    };
+
+    // Map from DB preferences to UserSettings shape
+    const prefs = profile.preferences || {};
+    const settings: UserSettings = {
+      name: (prefs.name as string) || user.name || "",
+      gender: (prefs.gender as string) || "",
+      address: (prefs.address as string) || "",
+      email: (prefs.email as string) || user.email || "",
+      phone: (prefs.phone as string) || "",
+      interests: Array.isArray(prefs.interests) ? (prefs.interests as string[]) : [],
+    };
+
+    return { success: true, data: settings };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to get settings",
+    };
+  }
+}
+
+async function updateUserSettings(
+  settings: UserSettings,
+): Promise<ApiResponse> {
+  const user = await getStoredAuth();
+  if (!user) {
+    return { success: false, error: "not_authenticated" };
+  }
+
+  try {
+    const resp = await fetch(`${BACKEND_API}/api/profile`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: user.userId,
+        preferences: {
+          name: settings.name,
+          gender: settings.gender,
+          address: settings.address,
+          email: settings.email,
+          phone: settings.phone,
+          interests: settings.interests,
+        },
+      }),
+    });
+
+    if (!resp.ok) {
+      return { success: false, error: `HTTP ${resp.status}` };
+    }
+
+    const profile = await resp.json();
+    return { success: true, data: profile };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to update settings",
+    };
+  }
+}
 
 /**
  * Handle API requests from content scripts
  * Avoids CORS issues by making fetch calls from the service worker
- * Can see the console logs in the service worker logs
  */
 async function handleApiRequest(
   payload: ApiRequestMessage["payload"],
@@ -109,38 +308,6 @@ async function handleApiRequest(
       error: error instanceof Error ? error.message : "Unknown error occurred",
     };
   }
-}
-
-/**
- * TODO get user settings backend API
- */
-async function getUserSettings(): Promise<ApiResponse> {
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 100));
-
-  console.log("[InterfaceAI Background] Fetching user settings");
-  return {
-    success: true,
-    data: userSettings,
-  };
-}
-
-/**
- * TODO Update user settings backend API
- */
-async function updateUserSettings(
-  settings: UserSettings,
-): Promise<ApiResponse> {
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 100));
-
-  console.log("[InterfaceAI Background] Updating user settings", settings);
-  userSettings = { ...settings };
-
-  return {
-    success: true,
-    data: userSettings,
-  };
 }
 
 /**
@@ -191,7 +358,6 @@ chrome.runtime.onMessage.addListener(
     console.log("[InterfaceAI Background] Received message:", message.type);
 
     if (message.type === "API_REQUEST") {
-      // Handle API request asynchronously
       handleApiRequest((message as ApiRequestMessage).payload)
         .then(sendResponse)
         .catch((error) => {
@@ -200,12 +366,41 @@ chrome.runtime.onMessage.addListener(
             error: error instanceof Error ? error.message : "Unknown error",
           });
         });
-
-      // Return true to indicate we'll send a response asynchronously
       return true;
     }
 
-    // Handle settings get and update request
+    // ----- Authentication -----
+    if (message.type === "GOOGLE_SIGN_IN") {
+      googleSignIn().then(sendResponse).catch((error) => {
+        sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : "Sign-in failed",
+        });
+      });
+      return true;
+    }
+
+    if (message.type === "GOOGLE_SIGN_OUT") {
+      googleSignOut().then(sendResponse).catch((error) => {
+        sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : "Sign-out failed",
+        });
+      });
+      return true;
+    }
+
+    if (message.type === "GET_AUTH_STATE") {
+      getAuthState().then(sendResponse).catch((error) => {
+        sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : "Auth state error",
+        });
+      });
+      return true;
+    }
+
+    // ----- Settings -----
     if (message.type === "GET_USER_SETTINGS") {
       getUserSettings()
         .then(sendResponse)
@@ -216,7 +411,6 @@ chrome.runtime.onMessage.addListener(
               error instanceof Error ? error.message : "Failed to get settings",
           });
         });
-
       return true;
     }
 
@@ -232,7 +426,6 @@ chrome.runtime.onMessage.addListener(
                 : "Failed to update settings",
           });
         });
-
       return true;
     }
 
@@ -246,7 +439,6 @@ chrome.runtime.onMessage.addListener(
               error instanceof Error ? error.message : "Action relay failed",
           });
         });
-
       return true;
     }
 
@@ -260,7 +452,6 @@ chrome.runtime.onMessage.addListener(
             error: error instanceof Error ? error.message : "Screenshot failed",
           });
         });
-
       return true;
     }
 
@@ -281,24 +472,19 @@ chrome.runtime.onInstalled.addListener((details) => {
 
 /**
  * Toggle overlay on a specific tab
- * Shared function for both icon clicks and keyboard shortcuts
  */
 async function toggleOverlay(tab: chrome.tabs.Tab): Promise<void> {
   if (!tab.id) return;
 
   try {
-    // Send message to content script to toggle overlay visibility
     await chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_OVERLAY" });
   } catch (error) {
-    // Content script might not be loaded yet, try injecting it
     console.log("[InterfaceAI] Injecting content script...");
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         files: ["content.js"],
       });
-      // After injection, send the toggle message to show the overlay
-      // Small delay to ensure content script is fully initialized
       setTimeout(async () => {
         try {
           await chrome.tabs.sendMessage(tab.id!, { type: "TOGGLE_OVERLAY" });
@@ -319,7 +505,7 @@ async function toggleOverlay(tab: chrome.tabs.Tab): Promise<void> {
 }
 
 /**
- * Handle extension icon clicks - toggle the overlay on the current tab
+ * Handle extension icon clicks
  */
 chrome.action.onClicked.addListener(async (tab) => {
   console.log("[InterfaceAI] Extension icon clicked", tab.id);
