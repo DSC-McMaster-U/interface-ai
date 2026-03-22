@@ -367,6 +367,162 @@ export function clickFileInput(identifier: string): ActionResult {
   return { success: true, name: input.name || input.id || "file input" };
 }
 
+function resolveFileInput(identifier: string): HTMLInputElement | null {
+  const lower = identifier.toLowerCase();
+
+  let input: HTMLInputElement | null =
+    document.querySelector<HTMLInputElement>(
+      `input[type="file"][name="${identifier}" i]`,
+    ) ||
+    document.querySelector<HTMLInputElement>(
+      `input[type="file"]#${CSS.escape(identifier)}`,
+    ) ||
+    document.querySelector<HTMLInputElement>(
+      `input[type="file"][aria-label*="${identifier}" i]`,
+    );
+
+  if (!input) {
+    for (const label of document.querySelectorAll("label")) {
+      if (label.textContent?.toLowerCase().includes(lower)) {
+        const forAttr = label.getAttribute("for");
+        const candidate = forAttr
+          ? (document.getElementById(forAttr) as HTMLInputElement | null)
+          : label.querySelector<HTMLInputElement>('input[type="file"]');
+        if (candidate?.type === "file") {
+          input = candidate;
+          break;
+        }
+      }
+    }
+  }
+
+  return input ?? document.querySelector<HTMLInputElement>('input[type="file"]');
+}
+
+/**
+ * Upload a file to a file input by fetching it from a path or URL.
+ *
+ * - filePath: a local file path (e.g. C:\Users\...\doc.pdf or /home/.../doc.pdf)
+ *   or an http/https URL. Local paths are converted to file:// URLs — this
+ *   requires the extension to have file:// access enabled in browser settings.
+ * - keyword: if provided (and no filePath), searches the current page for
+ *   clickable elements whose visible text contains the keyword (useful in
+ *   web-based file managers like Google Drive, OneDrive, etc.) and clicks the
+ *   first match to select/navigate to that file before attaching it.
+ */
+export async function uploadFile(
+  identifier: string,
+  filePath?: string,
+  keyword?: string,
+): Promise<ActionResult> {
+  const input = resolveFileInput(identifier);
+  if (!input) {
+    return {
+      success: false,
+      error: `No file input found matching: "${identifier}"`,
+    };
+  }
+
+  // Keyword search: look for a matching item in the current page (e.g. a file
+  // manager listing) and click it so the page selects/highlights that file.
+  if (keyword && !filePath) {
+    const kw = keyword.toLowerCase();
+    const candidates = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        'a, [role="row"], [role="listitem"], li, tr, [role="option"]',
+      ),
+    );
+    const match = candidates.find((el) =>
+      el.textContent?.toLowerCase().includes(kw),
+    );
+    if (match) {
+      match.click();
+      return {
+        success: true,
+        action: "keyword-click",
+        keyword,
+        element: match.tagName,
+        text: match.textContent?.trim().substring(0, 80),
+      };
+    }
+    return {
+      success: false,
+      error: `No page element found containing keyword: "${keyword}"`,
+    };
+  }
+
+  if (!filePath) {
+    return { success: false, error: "Provide filePath or keyword" };
+  }
+
+  // Build a fetchable URL from the path
+  let fileUrl: string;
+  if (/^https?:\/\//i.test(filePath)) {
+    fileUrl = filePath;
+  } else {
+    const normalized = filePath.replace(/\\/g, "/");
+    fileUrl = normalized.startsWith("/")
+      ? `file://${normalized}`
+      : `file:///${normalized}`;
+  }
+
+  const fileName = filePath.split(/[/\\]/).pop() || "upload";
+
+  // For file:// URLs, route through the background service worker because
+  // content scripts cannot fetch file:// URLs directly (browser security policy).
+  const fetchViaBackground = fileUrl.startsWith("file://");
+
+  try {
+    let dataUrl: string;
+
+    if (fetchViaBackground) {
+      const response = await new Promise<{ success: boolean; data?: string; error?: string }>(
+        (resolve) => chrome.runtime.sendMessage({ type: "FETCH_FILE", fileUrl }, resolve),
+      );
+      if (!response?.success || !response.data) {
+        throw new Error(response?.error ?? "Background fetch failed");
+      }
+      dataUrl = response.data;
+    } else {
+      const r = await fetch(fileUrl);
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+      const blob = await r.blob();
+      dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error("FileReader failed"));
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    // Convert data URL → Blob → File and attach to the input
+    const fetchedBlob = await fetch(dataUrl).then((r) => r.blob());
+    const file = new File([fetchedBlob], fileName, {
+      type: fetchedBlob.type || "application/octet-stream",
+      lastModified: Date.now(),
+    });
+
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+
+    return {
+      success: true,
+      fileName,
+      size: file.size,
+      type: file.type,
+      inputName: input.name || input.id || "file input",
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: `Could not load "${filePath}": ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
 // -------------------- PAGE STATUS --------------------
 
 export interface PageStatus {
@@ -440,6 +596,61 @@ export function getPageStatus(): PageStatus {
   };
 }
 
+// -------------------- WEBSITE CONTENT --------------------
+
+export interface WebsiteContent {
+  title: string;
+  url: string;
+  /** Extracted readable paragraphs/headings, noise-filtered */
+  paragraphs: string[];
+  /** Full text joined with newlines, capped at 50 000 chars */
+  fullText: string;
+}
+
+/**
+ * Scrape the readable text content of the current page.
+ * Strips navigation, footers, scripts, ads, etc. and returns the main prose.
+ */
+export function getWebsiteContent(): WebsiteContent {
+  // Clone body so we can strip noise without touching the live DOM
+  const clone = document.body.cloneNode(true) as HTMLElement;
+  clone
+    .querySelectorAll(
+      "script, style, noscript, nav, header, footer, aside, " +
+        '[role="navigation"], [role="banner"], [role="contentinfo"], ' +
+        '[role="complementary"], form, .ad, .ads, .advertisement, ' +
+        ".sidebar, .menu, .navbar, .nav, .footer, .header",
+    )
+    .forEach((el) => el.remove());
+
+  // Prefer a semantic content container
+  const root =
+    clone.querySelector("article") ??
+    clone.querySelector("main") ??
+    clone.querySelector('[role="main"]') ??
+    clone;
+
+  const seen = new Set<string>();
+  const paragraphs: string[] = [];
+
+  root
+    .querySelectorAll("p, h1, h2, h3, h4, h5, h6, li, blockquote, figcaption")
+    .forEach((el) => {
+      const text = el.textContent?.replace(/\s+/g, " ").trim();
+      if (text && text.length > 20 && !seen.has(text)) {
+        seen.add(text);
+        paragraphs.push(text);
+      }
+    });
+
+  return {
+    title: document.title,
+    url: window.location.href,
+    paragraphs: paragraphs.slice(0, 200),
+    fullText: paragraphs.slice(0, 200).join("\n\n").substring(0, 50_000),
+  };
+}
+
 // -------------------- ACTION DISPATCHER --------------------
 
 export type ActionType =
@@ -456,9 +667,21 @@ export type ActionType =
   | { type: "typeText"; text: string }
   | { type: "selectOption"; identifier: string; value: string }
   | { type: "clickFileInput"; identifier: string }
-  | { type: "getPageStatus" };
+  | {
+      type: "uploadFile";
+      /** Label/name/id of the file input element */
+      identifier: string;
+      /** Full local file path (e.g. C:\docs\cv.pdf) or http/https URL */
+      filePath?: string;
+      /** Keyword to search for in the page when a full path is unavailable */
+      keyword?: string;
+    }
+  | { type: "getPageStatus" }
+  | { type: "getWebsiteContent" };
 
-export function executeAction(action: ActionType): ActionResult | PageStatus {
+export async function executeAction(
+  action: ActionType,
+): Promise<ActionResult | PageStatus | WebsiteContent> {
   switch (action.type) {
     case "clickAtCoordinate":
       return clickAtCoordinate(action.x, action.y);
@@ -486,8 +709,12 @@ export function executeAction(action: ActionType): ActionResult | PageStatus {
       return selectOption(action.identifier, action.value);
     case "clickFileInput":
       return clickFileInput(action.identifier);
+    case "uploadFile":
+      return uploadFile(action.identifier, action.filePath, action.keyword);
     case "getPageStatus":
       return getPageStatus();
+    case "getWebsiteContent":
+      return getWebsiteContent();
     default:
       return { success: false, error: "Unknown action type" };
   }
@@ -521,8 +748,15 @@ export function describeAction(action: ActionType): string {
       return `Select "${action.value}" in "${action.identifier}"`;
     case "clickFileInput":
       return `Open file picker for "${action.identifier}"`;
+    case "uploadFile":
+      if (action.keyword) {
+        return `Search page for "${action.keyword}" and select file for "${action.identifier}"`;
+      }
+      return `Upload "${action.filePath ?? "file"}" to "${action.identifier}"`;
     case "getPageStatus":
       return "Get page status";
+    case "getWebsiteContent":
+      return "Get website text content";
     default:
       return "Execute action";
   }

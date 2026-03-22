@@ -21,15 +21,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message.type === "EXECUTE_ACTION") {
     const { payload } = message as ExecuteActionMessage;
-    try {
-      const result = executeAction(payload);
-      sendResponse({ success: true, data: result });
-    } catch (err) {
-      sendResponse({
-        success: false,
-        error: err instanceof Error ? err.message : "Action failed",
-      });
-    }
+    executeAction(payload)
+      .then((result) => sendResponse({ success: true, data: result }))
+      .catch((err) =>
+        sendResponse({
+          success: false,
+          error: err instanceof Error ? err.message : "Action failed",
+        }),
+      );
     return true;
   }
 

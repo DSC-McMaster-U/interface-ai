@@ -70,7 +70,7 @@ async function runActions(
     const label = describeAction(action);
     await new Promise((r) => setTimeout(r, 150));
     try {
-      const result = executeAction(action);
+      const result = await executeAction(action);
       const ok = "success" in result ? (result.success as boolean) : true;
       const detail = !ok && "error" in result ? ` — ${result.error}` : "";
       addActionMessage(shadowRoot, `${label}${detail}`, ok);
@@ -87,27 +87,29 @@ async function runActions(
 // -------------------- COMMAND PARSER --------------------
 
 const HELP_TEXT = `Available commands:
-/click <name>            — click button or link by text
-/fill <field> <value>    — fill an input by name/label
-/type <text>             — type text into the focused element
-/enter [field]           — press Enter (on active or named field)
-/scroll up [px]          — scroll up (default 500px)
-/scroll down [px]        — scroll down (default 500px)
-/scroll top              — scroll to top
-/scroll bottom           — scroll to bottom
-/goto <url>              — navigate to URL
-/coord <x> <y>           — click at screen coordinates
-/select <field> <option> — choose a dropdown option by text
-/upload <field>          — open the file picker for a file input
-/result                  — click first search result
-/status                  — show page info
-/screenshot              — take a screenshot of the current page
-/help                    — show this list
+/click <name>                    — click button or link by text
+/fill <field> <value>            — fill an input by name/label
+/type <text>                     — type text into the focused element
+/enter [field]                   — press Enter (on active or named field)
+/scroll up [px]                  — scroll up (default 500px)
+/scroll down [px]                — scroll down (default 500px)
+/scroll top                      — scroll to top
+/scroll bottom                   — scroll to bottom
+/goto <url>                      — navigate to URL
+/coord <x> <y>                   — click at screen coordinates
+/select <field> <option>         — choose a dropdown option by text
+/upload <field> <path>           — attach a file by path or URL to a file input
+/upload <field> keyword:<term>   — search page for <term> and click matching file
+/content                         — extract readable text content from the page
+/result                          — click first search result
+/status                          — show page info
+/screenshot                      — take a screenshot of the current page
+/help                            — show this list
 
 Chain commands by separating with ", ":
   /fill search computers, /enter search`;
 
-import { getPageStatus } from "./actions";
+import { getPageStatus, getWebsiteContent, uploadFile } from "./actions";
 import {
   clickAtCoordinate,
   clickByName,
@@ -293,10 +295,49 @@ async function handleCommand(
 
     case "upload": {
       if (!argParts[0]) {
-        fail("Usage: /upload <field>");
+        fail(
+          'Usage: /upload <field> <path|URL>  or  /upload <field> keyword:<term>',
+        );
         return true;
       }
-      report(clickFileInput(args), `Open file picker for "${args}"`);
+      const field = argParts[0];
+      const rest = argParts.slice(1).join(" ");
+      if (!rest) {
+        // No path given — fall back to opening the native file picker
+        report(clickFileInput(field), `Open file picker for "${field}"`);
+        return true;
+      }
+      // Explicit keyword: prefix or auto-detect (no path separators / drive letter / http)
+      const kwMatch = rest.match(/^keyword:(.+)$/i);
+      const keyword = kwMatch ? kwMatch[1].trim() : rest;
+      const isPath =
+        !kwMatch &&
+        (/^https?:\/\//i.test(rest) ||
+          /^[a-zA-Z]:[/\\]/.test(rest) ||
+          rest.startsWith("/") ||
+          rest.startsWith("./") ||
+          rest.startsWith("..\\"));
+      if (isPath) {
+        uploadFile(field, rest).then((r) =>
+          report(r, `Upload "${rest}" to "${field}"`),
+        );
+      } else {
+        uploadFile(field, undefined, keyword).then((r) =>
+          report(r, `Search for "${keyword}" and attach to "${field}"`),
+        );
+      }
+      return true;
+    }
+
+    case "content": {
+      const content = getWebsiteContent();
+      if (content.paragraphs.length === 0) {
+        fail("No readable content found on this page.");
+      } else {
+        ok(
+          `[${content.title}]\n\n${content.paragraphs.slice(0, 30).join("\n\n")}`,
+        );
+      }
       return true;
     }
 
