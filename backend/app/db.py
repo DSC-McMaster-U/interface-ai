@@ -43,6 +43,7 @@ def get_cursor():
 # Table initialisation
 # ---------------------------------------------------------------------------
 
+
 def init_tables() -> None:
     """Create the profiles and memories tables if they do not exist."""
     conn = _get_conn()
@@ -74,6 +75,7 @@ def init_tables() -> None:
 # ---------------------------------------------------------------------------
 # Profile helpers
 # ---------------------------------------------------------------------------
+
 
 def get_profile(user_id: str) -> dict[str, Any]:
     """Return the profile row for *user_id*, or a default empty one."""

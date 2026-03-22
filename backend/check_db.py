@@ -6,7 +6,7 @@ try:
         port=5432,
         dbname="interfaceai-db",
         user="postgres",
-        password="=JVO7L6=@>qYO$m,"
+        password="=JVO7L6=@>qYO$m,",
     ) as conn:
         with conn.cursor() as cur:
             cur.execute("""

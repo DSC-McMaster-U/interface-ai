@@ -25,12 +25,15 @@ try:
     init_tables()
     logger.info("Database tables ready.")
 except Exception as exc:
-    logger.warning("Could not initialise DB tables (will retry on first request): %s", exc)
+    logger.warning(
+        "Could not initialise DB tables (will retry on first request): %s", exc
+    )
 
 
 # ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
+
 
 @app.get("/health")
 def health():
@@ -53,7 +56,9 @@ def auth_google():
         return jsonify({"error": "missing token"}), 400
 
     # Verify the token with Google
-    resp = requests.get(GOOGLE_TOKENINFO_URL, params={"access_token": token}, timeout=10)
+    resp = requests.get(
+        GOOGLE_TOKENINFO_URL, params={"access_token": token}, timeout=10
+    )
     if resp.status_code != 200:
         return jsonify({"error": "invalid token"}), 401
 
@@ -71,16 +76,22 @@ def auth_google():
         upsert_profile(user_id, {"email": email})
         profile = get_profile(user_id)
 
-    return jsonify({
-        "user_id": user_id,
-        "email": email,
-        "profile": profile,
-    }), 200
+    return (
+        jsonify(
+            {
+                "user_id": user_id,
+                "email": email,
+                "profile": profile,
+            }
+        ),
+        200,
+    )
 
 
 # ---------------------------------------------------------------------------
 # Profile CRUD
 # ---------------------------------------------------------------------------
+
 
 @app.get("/api/profile")
 def get_user_profile():
