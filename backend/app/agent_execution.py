@@ -41,6 +41,10 @@ class AgentSession:
         self._require_approval: bool = True
         self._queued_goal: str | None = None
         self._restart_watcher_active: bool = False
+        self._user_id: str | None = None
+
+    def set_user_id(self, user_id: str | None) -> None:
+        self._user_id = user_id
 
     def is_running(self) -> bool:
         return bool(self._thread and self._thread.is_alive())
@@ -378,6 +382,7 @@ class AgentSession:
                 request_user_input=self.request_user_input,
                 get_runtime_feedback=self.drain_runtime_feedback,
                 stop_event=self._stop,
+                user_id=self._user_id,
             )
         except Exception as exc:
             self._emit(f"Agent crashed: {type(exc).__name__}: {exc}")

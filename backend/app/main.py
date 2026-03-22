@@ -1,22 +1,110 @@
 import json
+import logging
 
+import requests
 from flask import Flask, Response, jsonify, request, stream_with_context
 from flask_cors import CORS
 
 from app.agent_execution import session
+from app.db import get_profile, init_tables, upsert_profile
 from app.extension_automation import (
     is_server_running,
     send_command_sync,
     start_websocket_server,
 )
 
+logger = logging.getLogger(__name__)
+
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
+# ---------------------------------------------------------------------------
+# Database initialisation
+# ---------------------------------------------------------------------------
+try:
+    init_tables()
+    logger.info("Database tables ready.")
+except Exception as exc:
+    logger.warning("Could not initialise DB tables (will retry on first request): %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# Health
+# ---------------------------------------------------------------------------
 
 @app.get("/health")
 def health():
     return "ok", 200
+
+
+# ---------------------------------------------------------------------------
+# Google OAuth token verification
+# ---------------------------------------------------------------------------
+
+GOOGLE_TOKENINFO_URL = "https://www.googleapis.com/oauth2/v3/tokeninfo"
+
+
+@app.post("/api/auth/google")
+def auth_google():
+    """Accept a Google OAuth access token, verify it, and return user info."""
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or "").strip()
+    if not token:
+        return jsonify({"error": "missing token"}), 400
+
+    # Verify the token with Google
+    resp = requests.get(GOOGLE_TOKENINFO_URL, params={"access_token": token}, timeout=10)
+    if resp.status_code != 200:
+        return jsonify({"error": "invalid token"}), 401
+
+    info = resp.json()
+    email = info.get("email", "")
+    user_id = info.get("sub", email)
+
+    if not user_id:
+        return jsonify({"error": "could not determine user id"}), 400
+
+    # Ensure profile row exists
+    profile = get_profile(user_id)
+    if not profile.get("preferences"):
+        # Seed with email
+        upsert_profile(user_id, {"email": email})
+        profile = get_profile(user_id)
+
+    return jsonify({
+        "user_id": user_id,
+        "email": email,
+        "profile": profile,
+    }), 200
+
+
+# ---------------------------------------------------------------------------
+# Profile CRUD
+# ---------------------------------------------------------------------------
+
+@app.get("/api/profile")
+def get_user_profile():
+    """Return the profile for the given user_id query param."""
+    user_id = request.args.get("user_id", "").strip()
+    if not user_id:
+        return jsonify({"error": "missing user_id"}), 400
+    profile = get_profile(user_id)
+    return jsonify(profile), 200
+
+
+@app.post("/api/profile")
+def update_user_profile():
+    """Upsert the user profile preferences."""
+    data = request.get_json(silent=True) or {}
+    user_id = (data.get("user_id") or "").strip()
+    preferences = data.get("preferences")
+    if not user_id:
+        return jsonify({"error": "missing user_id"}), 400
+    if preferences is None:
+        return jsonify({"error": "missing preferences"}), 400
+
+    profile = upsert_profile(user_id, preferences)
+    return jsonify(profile), 200
 
 
 @app.get("/api/extension/health")
@@ -44,17 +132,22 @@ def api_extension_command():
 @app.route("/api/relay", methods=["GET", "POST"])
 def relay():
     if request.method == "POST":
-        message = (request.get_json(silent=True) or {}).get("message", "")
+        data = request.get_json(silent=True) or {}
+        message = data.get("message", "")
+        user_id = data.get("user_id", "")
     else:
         message = request.args.get("message", "")
+        user_id = request.args.get("user_id", "")
 
     msg = (message or "").strip()
+    uid = (user_id or "").strip() or None
 
     if msg.upper().startswith("GOAL:"):
         goal = msg.split(":", 1)[-1].strip()
         if not goal:
             return _sse([{"message": "Missing goal text after GOAL:"}, {"done": True}])
 
+        session.set_user_id(uid)
         session.start(goal, restart_if_running=True)
 
         def stream_agent():
