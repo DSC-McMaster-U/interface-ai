@@ -330,17 +330,23 @@ const GOOGLE_G_SVG = `<svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3
 export function renderSignIn(
   shadowRoot: ShadowRoot | null,
   onSignIn: () => void,
+  errorMessage?: string,
 ): void {
   const settingsContent = shadowRoot?.getElementById("settings-content");
   if (!settingsContent) return;
 
+  const errorHtml = errorMessage
+    ? `<p style="color: rgba(239, 68, 68, 0.9); font-size: 12px; margin-top: 8px; padding: 8px 12px; background: rgba(239, 68, 68, 0.1); border-radius: 8px;">${errorMessage}</p>`
+    : "";
+
   settingsContent.innerHTML = `
     <div class="auth-section">
-      <p>Sign in with your Google account to sync your preferences and let Luna personalise your experience.</p>
+      <p>Sign in with your Google account to sync your preferences and let InterfaceAI personalise your experience.</p>
       <button class="google-signin-btn" id="google-signin-btn">
         ${GOOGLE_G_SVG}
         Sign in with Google
       </button>
+      ${errorHtml}
     </div>
   `;
 
@@ -495,20 +501,25 @@ export function setupSettingsListeners(
   });
 }
 
+export interface SignInResult {
+  user: AuthUser | null;
+  error?: string;
+}
+
 /**
  * Request Google Sign-In via background script
  */
-export async function requestGoogleSignIn(): Promise<AuthUser | null> {
+export async function requestGoogleSignIn(): Promise<SignInResult> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage({ type: "GOOGLE_SIGN_IN" }, (response: ApiResponse) => {
       if (chrome.runtime.lastError) {
         console.error("[Settings] Sign-in error:", chrome.runtime.lastError);
-        resolve(null);
+        resolve({ user: null, error: chrome.runtime.lastError.message || "Chrome runtime error" });
       } else if (response.success && response.data) {
-        resolve(response.data as AuthUser);
+        resolve({ user: response.data as AuthUser });
       } else {
         console.error("[Settings] Sign-in failed:", response.error);
-        resolve(null);
+        resolve({ user: null, error: response.error || "Sign-in failed" });
       }
     });
   });

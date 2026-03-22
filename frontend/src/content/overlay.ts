@@ -221,13 +221,17 @@ export class InterfaceAIOverlay {
       `;
     }
 
-    const user = await requestGoogleSignIn();
-    if (user) {
-      this.authUser = user;
+    const result = await requestGoogleSignIn();
+    if (result.user) {
+      this.authUser = result.user;
       await this.loadAndRenderProfile();
     } else {
-      // Sign-in failed or cancelled, show sign-in again
-      renderSignIn(this.shadowRoot, () => this.handleSignIn());
+      // Sign-in failed or cancelled, show sign-in again with error
+      renderSignIn(
+        this.shadowRoot,
+        () => this.handleSignIn(),
+        result.error || "Sign-in failed. Please try again.",
+      );
     }
   }
 
