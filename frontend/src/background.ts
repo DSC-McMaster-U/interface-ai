@@ -4,7 +4,7 @@
  */
 
 // URL for the backend API
-const BACKEND_API = "http://localhost:5000";
+const BACKEND_API = "http://localhost:5050";
 
 /**
  * Message types for communication with content scripts

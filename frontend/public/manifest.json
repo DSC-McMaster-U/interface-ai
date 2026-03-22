@@ -12,13 +12,13 @@
   },
   "permissions": ["activeTab", "scripting", "tabs", "storage", "identity"],
   "oauth2": {
-    "client_id": "YOUR_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com",
+    "client_id": "1090393339218-gsf96sakonilsgak4mug7vdsf3vbcpps.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/userinfo.profile"
     ]
   },
-  "host_permissions": ["http://localhost:5000/*", "<all_urls>"],
+  "host_permissions": ["http://localhost:5050/*", "<all_urls>"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
