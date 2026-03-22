@@ -498,7 +498,10 @@ export function setupInput(
           throw new Error(`HTTP ${once.status}`);
         }
 
-        const data = (await once.json()) as { message?: string; done?: boolean };
+        const data = (await once.json()) as {
+          message?: string;
+          done?: boolean;
+        };
         handlers.showLoading(false);
         if (typeof data.message === "string" && data.message) {
           handlers.addMessage(data.message, "assistant");

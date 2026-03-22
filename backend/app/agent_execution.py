@@ -152,7 +152,9 @@ class AgentSession:
             return False
 
         self._runtime_feedback.put(msg)
-        self._emit("Feedback delivered to agent. It will adjust on the next planning pass.")
+        self._emit(
+            "Feedback delivered to agent. It will adjust on the next planning pass."
+        )
         return True
 
     def drain_runtime_feedback(self) -> list[str]:
@@ -177,7 +179,9 @@ class AgentSession:
         if self.is_waiting_for_user_input():
             self._user_input_value = msg
             self._user_input_event.set()
-            self._emit(f"User answer received for {self._pending_user_input.field_key}.")
+            self._emit(
+                f"User answer received for {self._pending_user_input.field_key}."
+            )
             return "user_input"
 
         if self.is_waiting_for_approval():

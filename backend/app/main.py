@@ -75,7 +75,9 @@ def relay():
 def relay_once():
     msg = ((request.get_json(silent=True) or {}).get("message") or "").strip()
     items = _handle_non_goal_command(msg)
-    message = next((str(item.get("message", "")) for item in items if "message" in item), "")
+    message = next(
+        (str(item.get("message", "")) for item in items if "message" in item), ""
+    )
     done = any(bool(item.get("done")) for item in items)
     return jsonify({"message": message, "done": done})
 
@@ -90,7 +92,10 @@ def _handle_non_goal_command(msg: str) -> list[dict[str, object]]:
     if msg.upper() == "UNSTOP":
         if session.resume_last_goal():
             return [{"message": "Resuming most recent stopped goal."}, {"done": True}]
-        return [{"message": "No recently stopped goal is available to resume."}, {"done": True}]
+        return [
+            {"message": "No recently stopped goal is available to resume."},
+            {"done": True},
+        ]
 
     if msg.upper() == "HELP":
         help_text = (
@@ -119,7 +124,9 @@ def _handle_non_goal_command(msg: str) -> list[dict[str, object]]:
         status = "ON" if session.get_require_approval() else "OFF"
         return [{"message": f"Approval mode: {status}"}, {"done": True}]
 
-    if msg and (session.is_waiting_for_approval() or session.is_waiting_for_user_input()):
+    if msg and (
+        session.is_waiting_for_approval() or session.is_waiting_for_user_input()
+    ):
         result = session.submit_user_message(msg)
         if result == "ignored":
             return [{"done": True}]
@@ -128,11 +135,20 @@ def _handle_non_goal_command(msg: str) -> list[dict[str, object]]:
     if msg.upper().startswith("FEEDBACK:"):
         feedback = msg.split(":", 1)[1].strip()
         if not feedback:
-            return [{"message": "Missing feedback text after FEEDBACK:"}, {"done": True}]
+            return [
+                {"message": "Missing feedback text after FEEDBACK:"},
+                {"done": True},
+            ]
         if session.is_running():
             session.submit_runtime_feedback(feedback)
-            return [{"message": "Feedback delivered to the running agent."}, {"done": True}]
-        return [{"message": "No running agent session to receive feedback."}, {"done": True}]
+            return [
+                {"message": "Feedback delivered to the running agent."},
+                {"done": True},
+            ]
+        return [
+            {"message": "No running agent session to receive feedback."},
+            {"done": True},
+        ]
 
     if msg and session.is_running():
         session.submit_runtime_feedback(msg)
