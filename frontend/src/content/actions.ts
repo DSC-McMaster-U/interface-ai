@@ -423,9 +423,48 @@ export async function uploadFile(
     };
   }
 
-  // Keyword search: look for a matching item in the current page (e.g. a file
-  // manager listing) and click it so the page selects/highlights that file.
+  // Keyword / filename search
   if (keyword && !filePath) {
+    // If the keyword looks like a filename (has a file extension), search the
+    // local filesystem via the background service worker first.
+    if (/\.\w{2,5}$/.test(keyword)) {
+      const bgResponse = await new Promise<{
+        success: boolean;
+        data?: string;
+        error?: string;
+      }>((resolve) =>
+        chrome.runtime.sendMessage(
+          { type: "FIND_AND_FETCH_FILE", fileName: keyword },
+          resolve,
+        ),
+      );
+      if (bgResponse?.success && bgResponse.data) {
+        const fetchedBlob = await fetch(bgResponse.data).then((r) => r.blob());
+        const file = new File([fetchedBlob], keyword, {
+          type: fetchedBlob.type || "application/octet-stream",
+          lastModified: Date.now(),
+        });
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        return {
+          success: true,
+          fileName: keyword,
+          size: file.size,
+          type: file.type,
+          inputName: input.name || input.id || "file input",
+        };
+      }
+      return {
+        success: false,
+        error: bgResponse?.error ?? `"${keyword}" not found on filesystem`,
+      };
+    }
+
+    // Otherwise: search the current page's DOM for a matching element
+    // (useful in web-based file managers like Google Drive, OneDrive, etc.)
     const kw = keyword.toLowerCase();
     const candidates = Array.from(
       document.querySelectorAll<HTMLElement>(
@@ -447,7 +486,7 @@ export async function uploadFile(
     }
     return {
       success: false,
-      error: `No page element found containing keyword: "${keyword}"`,
+      error: `No page element found containing: "${keyword}"`,
     };
   }
 
