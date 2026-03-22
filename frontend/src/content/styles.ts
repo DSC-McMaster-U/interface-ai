@@ -185,6 +185,7 @@ export const OVERLAY_STYLES = `
     padding: 0;
     padding-right: 12px;
     color: #e4e4e7;
+    white-space: pre-wrap;
   }
 
   .message.error {

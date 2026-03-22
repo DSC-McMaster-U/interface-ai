@@ -2,7 +2,13 @@ import json
 import threading
 from typing import Any, Callable
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
@@ -21,6 +27,8 @@ def run_architecture_1(
     max_steps: int,
     emit: Callable[[str], None],
     approved_send: Callable[[str, dict[str, Any] | None], dict[str, Any]],
+    request_user_input: Callable[..., dict[str, Any]],
+    get_runtime_feedback: Callable[[], list[str]],
     stop_event: threading.Event,
 ) -> None:
     @tool
@@ -103,6 +111,17 @@ def run_architecture_1(
         """Open file picker by file input identifier."""
         return approved_send("clickFileInput", {"identifier": identifier})
 
+    @tool
+    def requestUserInput(
+        question: str, fieldKey: str, reason: str = ""
+    ) -> dict[str, Any]:
+        """Ask the user for task-critical missing information and wait for their answer."""
+        return request_user_input(
+            question,
+            field_key=fieldKey,
+            reason=reason,
+        )
+
     tools = [
         goto,
         clickByName,
@@ -120,6 +139,7 @@ def run_architecture_1(
         typeText,
         selectOption,
         clickFileInput,
+        requestUserInput,
     ]
 
     model = ChatGoogleGenerativeAI(
@@ -138,8 +158,13 @@ def run_architecture_1(
                 "You are a browser automation agent. Use tools to complete the goal. "
                 "Call one tool at a time. If a tool fails, you must try a different approach. "
                 "Use getPageStatus often; it includes dropdowns (selects) and file inputs when present. "
-                "Do not say done until completion is verified from getPageStatus."
-                "Always continue going and calling tools until the goal is complete, dont just stop midway. Be persistent and try different approaches if you fail."
+                "Do not say done until completion is verified from getPageStatus. "
+                "Always continue going and calling tools until the goal is complete; do not stop midway. "
+                "Be persistent and try different approaches if you fail. "
+                "Use requestUserInput only when the task cannot safely continue without task-critical user-specific data or a critical choice that cannot be inferred from the goal or page. "
+                "Do not ask for low-stakes ambiguities when a reasonable default is acceptable. "
+                "Example: for 'play minecraft vid', do not ask what site to use; just choose a reasonable place like YouTube and proceed. "
+                "Example: for a job application, if the form requires personal details like legal name, phone number, or a specific internship choice that is not clearly determined, ask a single precise question with requestUserInput. "
             )
         ),
         HumanMessage(content=f"Goal: {goal}"),
@@ -150,7 +175,27 @@ def run_architecture_1(
     last_agent_text = ""
 
     while remaining_attempts > 0 and not stop_event.is_set():
+        runtime_feedback = get_runtime_feedback()
+        if runtime_feedback:
+            for feedback in runtime_feedback:
+                messages = [
+                    *messages,
+                    HumanMessage(
+                        content=(
+                            f"Goal: {goal}\n"
+                            f"FEEDBACK: {feedback}\n"
+                            "This feedback updates how to pursue the same task and has higher priority "
+                            "than your previous path. Replan from the current browser state so the next "
+                            "tool call follows this updated direction."
+                        )
+                    ),
+                ]
+                emit(f"Runtime feedback received: {feedback}")
+
         latest_messages = messages
+        starting_tool_message_count = sum(
+            1 for message in messages if isinstance(message, ToolMessage)
+        )
 
         stream_succeeded = False
         stream_error: Exception | None = None
@@ -166,8 +211,17 @@ def run_architecture_1(
                         if text:
                             last_agent_text = text
                             emit(f"Agent: {text}")
-                    # Limit one agent pass to a reasonable number of state updates.
-                    if i >= 25 or stop_event.is_set():
+                    current_tool_message_count = sum(
+                        1
+                        for message in latest_messages
+                        if isinstance(message, ToolMessage)
+                    )
+                    # Stop after one completed tool step so new feedback can steer the next tool call.
+                    if (
+                        current_tool_message_count > starting_tool_message_count
+                        or i >= 25
+                        or stop_event.is_set()
+                    ):
                         break
                 stream_succeeded = True
                 break

@@ -83,7 +83,10 @@ export function addMessage(
   if (!container) return;
 
   const toolHandled =
-    type === "assistant" ? renderToolEventMessage(container, text) : false;
+    type === "assistant"
+      ? renderToolEventMessage(container, text) ||
+        renderUserInputEventMessage(container, text)
+      : false;
   if (toolHandled) {
     if (persist) {
       appendPersistedMessage({ text, type }).catch(() => {
@@ -131,6 +134,47 @@ function renderToolEventMessage(container: HTMLElement, text: string): boolean {
 
   applyToolUpdate(card, parsed.stage, parsed.rawPayload);
   return true;
+}
+
+function renderUserInputEventMessage(
+  container: HTMLElement,
+  text: string,
+): boolean {
+  const parsed = parseUserInputLine(text);
+  if (!parsed) return false;
+
+  if (parsed.stage === "request") {
+    const card = createToolCard("requestUserInput", parsed.rawPayload);
+    card.meta.textContent = "waiting for answer";
+    card.root.dataset.status = "pending";
+    pendingToolCards.push(card);
+    container.appendChild(card.root);
+    return true;
+  }
+
+  const card = findLatestPending("requestUserInput", "");
+  if (!card) {
+    const newCard = createToolCard("requestUserInput", "{}");
+    pendingToolCards.push(newCard);
+    container.appendChild(newCard.root);
+    applyToolUpdate(newCard, "result", parsed.rawPayload);
+    return true;
+  }
+
+  applyToolUpdate(card, "result", parsed.rawPayload);
+  return true;
+}
+
+function parseUserInputLine(
+  line: string,
+): { stage: "request" | "answer"; rawPayload: string } | null {
+  const m = line.match(/^\[user_input:(request|answer)\]\s*(.*)$/);
+  if (!m) return null;
+  const [, stage, payload] = m;
+  return {
+    stage: stage as "request" | "answer",
+    rawPayload: (payload || "").trim(),
+  };
 }
 
 function parseToolLine(
@@ -439,6 +483,28 @@ export function setupInput(
     try {
       const BACKEND_API = "http://localhost:5000";
       const url = `${BACKEND_API}/api/relay`;
+      const isStreamingGoal =
+        message.toUpperCase().startsWith("GOAL:") &&
+        Boolean(message.split(":", 2)[1]?.trim());
+
+      if (!isStreamingGoal) {
+        const once = await fetch(`${BACKEND_API}/api/relay_once`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message }),
+        });
+
+        if (!once.ok) {
+          throw new Error(`HTTP ${once.status}`);
+        }
+
+        const data = (await once.json()) as { message?: string; done?: boolean };
+        handlers.showLoading(false);
+        if (typeof data.message === "string" && data.message) {
+          handlers.addMessage(data.message, "assistant");
+        }
+        return;
+      }
 
       // Use fetch with streaming (handles CORS better than EventSource)
       const response = await fetch(
@@ -452,41 +518,64 @@ export function setupInput(
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let firstMessage = true;
+      let sseBuffer = "";
+      let sawDone = false;
 
       if (!reader) {
         throw new Error("No response body");
       }
 
       // Read the stream
-      while (true) {
+      while (!sawDone) {
         const { done, value } = await reader.read();
 
         if (done) break;
 
         // Decode the chunk
-        const chunk = decoder.decode(value, { stream: true });
+        sseBuffer += decoder.decode(value, { stream: true });
 
-        // Parse SSE lines (format: "data: {...}\n\n")
-        const lines = chunk.split("\n");
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const jsonStr = line.slice(6); // Remove "data: " prefix
-            try {
-              const data = JSON.parse(jsonStr);
+        // Parse complete SSE events separated by blank lines.
+        const parsed = consumeSseEvents(sseBuffer);
+        sseBuffer = parsed.remainder;
 
-              // Remove loading on first message
-              if (firstMessage) {
-                handlers.showLoading(false);
-                firstMessage = false;
-              }
-
-              if (data.message) {
-                handlers.addMessage(data.message, "assistant");
-              }
-            } catch {
-              // Skip invalid JSON lines
-            }
+        for (const data of parsed.events) {
+          if (firstMessage) {
+            handlers.showLoading(false);
+            firstMessage = false;
           }
+
+          if (typeof data.message === "string" && data.message) {
+            handlers.addMessage(data.message, "assistant");
+          }
+          if (data.done === true) {
+            sawDone = true;
+            break;
+          }
+        }
+      }
+
+      if (!sawDone && sseBuffer.trim()) {
+        const parsed = consumeSseEvents(`${sseBuffer}\n\n`);
+        for (const data of parsed.events) {
+          if (firstMessage) {
+            handlers.showLoading(false);
+            firstMessage = false;
+          }
+          if (typeof data.message === "string" && data.message) {
+            handlers.addMessage(data.message, "assistant");
+          }
+          if (data.done === true) {
+            sawDone = true;
+            break;
+          }
+        }
+      }
+
+      if (sawDone) {
+        try {
+          await reader.cancel();
+        } catch {
+          // Ignore reader cancellation errors.
         }
       }
 
@@ -518,6 +607,33 @@ export function setupInput(
     input.addEventListener("focus", stopPropagation);
     input.addEventListener("blur", stopPropagation);
   }
+}
+
+function consumeSseEvents(buffer: string): {
+  events: Array<Record<string, unknown>>;
+  remainder: string;
+} {
+  const normalized = buffer.replace(/\r\n/g, "\n");
+  const blocks = normalized.split("\n\n");
+  const remainder = normalized.endsWith("\n\n") ? "" : (blocks.pop() ?? "");
+  const events: Array<Record<string, unknown>> = [];
+
+  for (const block of blocks) {
+    const dataLines = block
+      .split("\n")
+      .filter((line) => line.startsWith("data: "))
+      .map((line) => line.slice(6));
+
+    if (!dataLines.length) continue;
+
+    try {
+      events.push(JSON.parse(dataLines.join("\n")) as Record<string, unknown>);
+    } catch {
+      // Ignore malformed event payloads.
+    }
+  }
+
+  return { events, remainder };
 }
 
 /**

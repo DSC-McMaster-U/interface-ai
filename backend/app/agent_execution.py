@@ -15,17 +15,29 @@ class ProposedAction:
     params: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class PendingUserInput:
+    question: str
+    field_key: str
+    reason: str = ""
+
+
 class AgentSession:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._out: queue.Queue[dict[str, Any]] = queue.Queue()
+        self._runtime_feedback: queue.Queue[str] = queue.Queue()
         self._pending_action: ProposedAction | None = None
+        self._pending_user_input: PendingUserInput | None = None
         self._approval_event = threading.Event()
         self._approval_decision: str | None = None
         self._feedback: str | None = None
+        self._user_input_event = threading.Event()
+        self._user_input_value: str | None = None
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._goal: str = ""
+        self._last_stopped_goal: str = ""
         self._require_approval: bool = True
         self._queued_goal: str | None = None
         self._restart_watcher_active: bool = False
@@ -35,6 +47,9 @@ class AgentSession:
 
     def is_waiting_for_approval(self) -> bool:
         return self._pending_action is not None
+
+    def is_waiting_for_user_input(self) -> bool:
+        return self._pending_user_input is not None
 
     def set_require_approval(self, enabled: bool) -> None:
         self._require_approval = bool(enabled)
@@ -90,9 +105,13 @@ class AgentSession:
 
             self._goal = next_goal
             self._pending_action = None
+            self._pending_user_input = None
             self._approval_decision = None
             self._feedback = None
+            self._user_input_value = None
+            self._runtime_feedback = queue.Queue()
             self._approval_event.clear()
+            self._user_input_event.clear()
             self._stop.clear()
 
             self._thread = threading.Thread(target=self._run, daemon=True)
@@ -110,30 +129,92 @@ class AgentSession:
             self.start(queued, restart_if_running=False)
 
     def stop(self) -> None:
+        if self._goal:
+            self._last_stopped_goal = self._goal
         self._stop.set()
         self._approval_event.set()
+        self._user_input_event.set()
 
-    def submit_user_message(self, text: str) -> None:
+    def resume_last_goal(self) -> bool:
+        resumable_goal = self._last_stopped_goal.strip()
+        if not resumable_goal or self.is_running():
+            return False
+
+        self._emit(f"Resuming last stopped goal: {resumable_goal}")
+        self.start(resumable_goal, restart_if_running=False)
+        return True
+
+    def submit_runtime_feedback(self, text: str) -> bool:
         msg = (text or "").strip()
         if not msg:
-            return
+            return False
+        if not self.is_running():
+            return False
+
+        self._runtime_feedback.put(msg)
+        self._emit("Feedback delivered to agent. It will adjust on the next planning pass.")
+        return True
+
+    def drain_runtime_feedback(self) -> list[str]:
+        items: list[str] = []
+        while True:
+            try:
+                items.append(self._runtime_feedback.get_nowait())
+            except queue.Empty:
+                break
+        return items
+
+    def submit_user_message(self, text: str) -> str:
+        msg = (text or "").strip()
+        if not msg:
+            return "ignored"
 
         if msg.upper() == "STOP":
             self._emit("Stopping agent session...")
             self.stop()
-            return
+            return "stopped"
 
-        if not self.is_waiting_for_approval():
-            self._emit("No pending action to approve right now.")
-            return
+        if self.is_waiting_for_user_input():
+            self._user_input_value = msg
+            self._user_input_event.set()
+            self._emit(f"User answer received for {self._pending_user_input.field_key}.")
+            return "user_input"
 
-        if msg.upper() == "YES":
-            self._approval_decision = "YES"
-        else:
-            self._approval_decision = "NO"
-            self._feedback = msg
+        if self.is_waiting_for_approval():
+            upper_msg = msg.upper()
+            if upper_msg == "YES":
+                self._approval_decision = "YES"
+                self._approval_event.set()
+                return "approval"
 
-        self._approval_event.set()
+            if upper_msg == "NO":
+                self._approval_decision = "NO"
+                self._feedback = "Rejected by user."
+                self._approval_event.set()
+                return "approval"
+
+            if upper_msg.startswith("FEEDBACK:"):
+                feedback = msg.split(":", 1)[1].strip()
+                if not feedback:
+                    self._emit(
+                        "Approval is pending. Use YES to approve, NO to reject, or FEEDBACK: <instruction>."
+                    )
+                    return "ignored"
+                self._approval_decision = "NO"
+                self._feedback = feedback
+                self._approval_event.set()
+                return "approval"
+
+            self._emit(
+                "Approval is pending. Use YES to approve, NO to reject, or FEEDBACK: <instruction>."
+            )
+            return "ignored"
+
+        if self.submit_runtime_feedback(msg):
+            return "feedback"
+
+        self._emit("No active agent session to receive that message.")
+        return "no_session"
 
     def stream(self):
         while True:
@@ -174,6 +255,71 @@ class AgentSession:
         if not approved and self._feedback:
             self._emit(f"Feedback received: {self._feedback}")
         return approved
+
+    def request_user_input(
+        self,
+        question: str,
+        *,
+        field_key: str,
+        reason: str = "",
+    ) -> dict[str, Any]:
+        normalized_question = (question or "").strip()
+        normalized_field_key = (field_key or "").strip() or "user_input"
+        normalized_reason = (reason or "").strip()
+
+        if not normalized_question:
+            return {"success": False, "error": "missing_question"}
+
+        if self._stop.is_set():
+            return {"success": False, "error": "stopped"}
+
+        self._pending_user_input = PendingUserInput(
+            question=normalized_question,
+            field_key=normalized_field_key,
+            reason=normalized_reason,
+        )
+        self._user_input_value = None
+        self._user_input_event.clear()
+
+        self._emit(
+            "[user_input:request] "
+            + json.dumps(
+                {
+                    "field_key": normalized_field_key,
+                    "question": normalized_question,
+                    "reason": normalized_reason,
+                },
+                ensure_ascii=True,
+            )
+        )
+        self._emit(normalized_question)
+        self._user_input_event.wait()
+
+        pending = self._pending_user_input
+        self._pending_user_input = None
+        if self._stop.is_set():
+            return {"success": False, "error": "stopped"}
+
+        answer = (self._user_input_value or "").strip()
+        self._user_input_value = None
+        if not answer:
+            return {"success": False, "error": "empty_user_input"}
+
+        self._emit(
+            "[user_input:answer] "
+            + json.dumps(
+                {
+                    "field_key": pending.field_key if pending else normalized_field_key,
+                    "value": answer,
+                },
+                ensure_ascii=True,
+            )
+        )
+        return {
+            "success": True,
+            "field_key": pending.field_key if pending else normalized_field_key,
+            "value": answer,
+        }
 
     def _approved_send(
         self, action: str, params: dict[str, Any] | None = None
@@ -225,6 +371,8 @@ class AgentSession:
                 max_steps=max_steps,
                 emit=self._emit,
                 approved_send=self._approved_send,
+                request_user_input=self.request_user_input,
+                get_runtime_feedback=self.drain_runtime_feedback,
                 stop_event=self._stop,
             )
         except Exception as exc:
