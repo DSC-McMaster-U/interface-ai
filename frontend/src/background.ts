@@ -88,7 +88,8 @@ async function googleSignIn(): Promise<ApiResponse> {
     // Get an OAuth2 access token using chrome.identity
     const token = await new Promise<string>((resolve, reject) => {
       chrome.identity.getAuthToken({ interactive: true }, (result) => {
-        const tok = typeof result === "string" ? result : (result as unknown as string);
+        const tok =
+          typeof result === "string" ? result : (result as unknown as string);
         if (chrome.runtime.lastError || !tok) {
           reject(new Error(chrome.runtime.lastError?.message || "No token"));
         } else {
@@ -103,7 +104,10 @@ async function googleSignIn(): Promise<ApiResponse> {
       { headers: { Authorization: `Bearer ${token}` } },
     );
     if (!profileResp.ok) {
-      return { success: false, error: `Google API error ${profileResp.status}` };
+      return {
+        success: false,
+        error: `Google API error ${profileResp.status}`,
+      };
     }
     const googleProfile = (await profileResp.json()) as {
       id: string;
@@ -123,7 +127,8 @@ async function googleSignIn(): Promise<ApiResponse> {
       const errData = await backendResp.json().catch(() => ({}));
       return {
         success: false,
-        error: (errData as Record<string, string>).error || "Backend auth failed",
+        error:
+          (errData as Record<string, string>).error || "Backend auth failed",
       };
     }
 
@@ -210,7 +215,9 @@ async function getUserSettings(): Promise<ApiResponse> {
       address: (prefs.address as string) || "",
       email: (prefs.email as string) || user.email || "",
       phone: (prefs.phone as string) || "",
-      interests: Array.isArray(prefs.interests) ? (prefs.interests as string[]) : [],
+      interests: Array.isArray(prefs.interests)
+        ? (prefs.interests as string[])
+        : [],
     };
 
     return { success: true, data: settings };
@@ -256,7 +263,8 @@ async function updateUserSettings(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to update settings",
+      error:
+        error instanceof Error ? error.message : "Failed to update settings",
     };
   }
 }
@@ -371,32 +379,38 @@ chrome.runtime.onMessage.addListener(
 
     // ----- Authentication -----
     if (message.type === "GOOGLE_SIGN_IN") {
-      googleSignIn().then(sendResponse).catch((error) => {
-        sendResponse({
-          success: false,
-          error: error instanceof Error ? error.message : "Sign-in failed",
+      googleSignIn()
+        .then(sendResponse)
+        .catch((error) => {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : "Sign-in failed",
+          });
         });
-      });
       return true;
     }
 
     if (message.type === "GOOGLE_SIGN_OUT") {
-      googleSignOut().then(sendResponse).catch((error) => {
-        sendResponse({
-          success: false,
-          error: error instanceof Error ? error.message : "Sign-out failed",
+      googleSignOut()
+        .then(sendResponse)
+        .catch((error) => {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : "Sign-out failed",
+          });
         });
-      });
       return true;
     }
 
     if (message.type === "GET_AUTH_STATE") {
-      getAuthState().then(sendResponse).catch((error) => {
-        sendResponse({
-          success: false,
-          error: error instanceof Error ? error.message : "Auth state error",
+      getAuthState()
+        .then(sendResponse)
+        .catch((error) => {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : "Auth state error",
+          });
         });
-      });
       return true;
     }
 

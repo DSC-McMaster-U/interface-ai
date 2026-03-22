@@ -511,17 +511,23 @@ export interface SignInResult {
  */
 export async function requestGoogleSignIn(): Promise<SignInResult> {
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ type: "GOOGLE_SIGN_IN" }, (response: ApiResponse) => {
-      if (chrome.runtime.lastError) {
-        console.error("[Settings] Sign-in error:", chrome.runtime.lastError);
-        resolve({ user: null, error: chrome.runtime.lastError.message || "Chrome runtime error" });
-      } else if (response.success && response.data) {
-        resolve({ user: response.data as AuthUser });
-      } else {
-        console.error("[Settings] Sign-in failed:", response.error);
-        resolve({ user: null, error: response.error || "Sign-in failed" });
-      }
-    });
+    chrome.runtime.sendMessage(
+      { type: "GOOGLE_SIGN_IN" },
+      (response: ApiResponse) => {
+        if (chrome.runtime.lastError) {
+          console.error("[Settings] Sign-in error:", chrome.runtime.lastError);
+          resolve({
+            user: null,
+            error: chrome.runtime.lastError.message || "Chrome runtime error",
+          });
+        } else if (response.success && response.data) {
+          resolve({ user: response.data as AuthUser });
+        } else {
+          console.error("[Settings] Sign-in failed:", response.error);
+          resolve({ user: null, error: response.error || "Sign-in failed" });
+        }
+      },
+    );
   });
 }
 
@@ -530,14 +536,17 @@ export async function requestGoogleSignIn(): Promise<SignInResult> {
  */
 export async function requestGoogleSignOut(): Promise<boolean> {
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ type: "GOOGLE_SIGN_OUT" }, (response: ApiResponse) => {
-      if (chrome.runtime.lastError) {
-        console.error("[Settings] Sign-out error:", chrome.runtime.lastError);
-        resolve(false);
-      } else {
-        resolve(response.success);
-      }
-    });
+    chrome.runtime.sendMessage(
+      { type: "GOOGLE_SIGN_OUT" },
+      (response: ApiResponse) => {
+        if (chrome.runtime.lastError) {
+          console.error("[Settings] Sign-out error:", chrome.runtime.lastError);
+          resolve(false);
+        } else {
+          resolve(response.success);
+        }
+      },
+    );
   });
 }
 
@@ -546,15 +555,18 @@ export async function requestGoogleSignOut(): Promise<boolean> {
  */
 export async function getAuthState(): Promise<AuthUser | null> {
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ type: "GET_AUTH_STATE" }, (response: ApiResponse) => {
-      if (chrome.runtime.lastError) {
-        resolve(null);
-      } else if (response.success && response.data) {
-        resolve(response.data as AuthUser);
-      } else {
-        resolve(null);
-      }
-    });
+    chrome.runtime.sendMessage(
+      { type: "GET_AUTH_STATE" },
+      (response: ApiResponse) => {
+        if (chrome.runtime.lastError) {
+          resolve(null);
+        } else if (response.success && response.data) {
+          resolve(response.data as AuthUser);
+        } else {
+          resolve(null);
+        }
+      },
+    );
   });
 }
 
