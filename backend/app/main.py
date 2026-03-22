@@ -100,6 +100,10 @@ def _handle_non_goal_command(msg: str) -> list[dict[str, object]]:
     if msg.upper() == "HELP":
         help_text = (
             "GOAL: <task> - start a new browser automation task.\n\n"
+            "SET USER ID: <id> - set the active user id for personalization and testing.\n\n"
+            "USER ID - show the active user id.\n\n"
+            "SET AGENT ID: <id> - set the active shared agent memory id.\n\n"
+            "AGENT ID - show the active agent id.\n\n"
             "FEEDBACK: <instruction> - redirect the running agent before its next tool call.\n\n"
             "STOP - stop the current agent session.\n\n"
             "UNSTOP - resume the most recently stopped goal.\n\n"
@@ -123,6 +127,32 @@ def _handle_non_goal_command(msg: str) -> list[dict[str, object]]:
     if msg.upper() == "APPROVAL STATUS":
         status = "ON" if session.get_require_approval() else "OFF"
         return [{"message": f"Approval mode: {status}"}, {"done": True}]
+
+    if msg.upper().startswith("SET USER ID:"):
+        user_id = msg.split(":", 1)[1].strip()
+        if not user_id:
+            return [{"message": "Missing user id after SET USER ID:"}, {"done": True}]
+        try:
+            session.set_user_id(user_id)
+        except ValueError as exc:
+            return [{"message": str(exc)}, {"done": True}]
+        return [{"message": f"Active user id set to: {session.get_user_id()}"}, {"done": True}]
+
+    if msg.upper() == "USER ID":
+        return [{"message": f"Active user id: {session.get_user_id()}"}, {"done": True}]
+
+    if msg.upper().startswith("SET AGENT ID:"):
+        agent_id = msg.split(":", 1)[1].strip()
+        if not agent_id:
+            return [{"message": "Missing agent id after SET AGENT ID:"}, {"done": True}]
+        try:
+            session.set_agent_id(agent_id)
+        except ValueError as exc:
+            return [{"message": str(exc)}, {"done": True}]
+        return [{"message": f"Active agent id set to: {session.get_agent_id()}"}, {"done": True}]
+
+    if msg.upper() == "AGENT ID":
+        return [{"message": f"Active agent id: {session.get_agent_id()}"}, {"done": True}]
 
     if msg and (
         session.is_waiting_for_approval() or session.is_waiting_for_user_input()

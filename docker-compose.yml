@@ -11,6 +11,11 @@ services:
       - DATABASE_URL=postgresql://user:password@postgres:5432/interfaceai
       - PYTHONUNBUFFERED=1
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - MEM0_API_KEY=${MEM0_API_KEY}
+      - MEM0_ORG_ID=${MEM0_ORG_ID}
+      - MEM0_PROJECT_ID=${MEM0_PROJECT_ID}
+      - MEM0_APP_ID=${MEM0_APP_ID}
+      - MEM0_AGENT_ID=${MEM0_AGENT_ID}
     depends_on:
       - redis
       - postgres
