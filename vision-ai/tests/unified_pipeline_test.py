@@ -123,6 +123,10 @@ def find_text_with_ocr(image_path: str, query: str, search_terms: List[str]) -> 
     terms_to_check = [t.lower() for t in search_terms] + [query.lower()]
     
     for bbox, text, conf in results:
+        if conf < 0.4:
+            # Skip low-confidence OCR matches to avoid garbage UI artifacts
+            continue
+            
         text_lower = text.lower()
         
         # Priority 1: Exact Query Match
@@ -376,6 +380,22 @@ def find_element_unified(image_path: str, query: str) -> Tuple[List[Tuple[int, i
     ai_analysis = analyze_intent_and_image(image_path, query)
     target_type = ai_analysis.get('target_type', 'TEXT')
     search_terms = ai_analysis.get('search_terms', [query])
+    
+    # Apply hardcoded query expansions as an extra safety net for icons
+    query_lower = query.lower()
+    fallback_expansions = {
+        'settings': ['gear icon', 'cogwheel', 'cog icon', 'preferences icon'],
+        'account': ['user icon', 'profile icon', 'person icon', 'avatar'],
+        'home': ['house icon', 'home icon', 'building'],
+        'search': ['magnifying glass', 'search icon', 'lens icon'],
+        'menu': ['hamburger menu', 'three lines', 'navigation icon', 'menu bars'],
+        'close': ['x icon', 'close icon', 'cancel icon', 'cross icon'],
+        'delete': ['trash icon', 'bin icon', 'garbage icon', 'delete icon']
+    }
+    for key, synonyms in fallback_expansions.items():
+        if key in query_lower:
+            search_terms.extend(synonyms)
+            
     location_hint = ai_analysis.get('location', '')
     image_size = ai_analysis.get('image_size', (0,0))
     
