@@ -1,12 +1,13 @@
 # Vision AI Test Scripts
 
-This directory contains five different approaches to locating UI elements in images:
+This directory contains different approaches to locating UI elements in images:
 
 1. **EasyOCR Text Detection** (`easyocr_test.py`) - Finds exact text matches using OCR
 2. **Gemini + EasyOCR** (`easyocr_gemini_test.py`) - Uses AI to generate related words, then searches for all variants
 3. **Grounding DINO** (`groundingdino_test.py`) - Zero-shot object detection that can find visual elements by description
 4. **Gemini Vision** (`gemini_vision_test.py`) - Uses Gemini's multimodal vision AI to detect and locate any UI element with semantic understanding
-5. **Gemini Hybrid** (`gemini_hybrid_test.py`) - **RECOMMENDED** - Combines Gemini's semantic understanding with CV for precise icon detection
+5. **Gemini Hybrid** (`gemini_hybrid_test.py`) - Combines Gemini's semantic understanding with CV for precise icon detection
+6. **Unified Pipeline** (`unified_pipeline_test.py`) - **RECOMMENDED PRODUCTION STACK** - Intelligent routing between Text (OCR) and Icons (CV) driven by Gemini 2.5 Flash's spatial hints.
 
 ## Install Dependencies
 
@@ -168,3 +169,26 @@ python gemini_hybrid_test.py input-images/input-icons.png "home"
 - search → magnifying glass, lens icon
 - menu → hamburger menu, three lines
 - And 15+ more common UI elements!
+
+### Script 6: Unified Pipeline (Gemini 2.5 Flash + EasyOCR + OpenCV)
+
+It dynamically routes your query to the correct tool based on whether you are looking for a text element or a visual icon, acting as the ultimate fallback for your automation graph.
+
+**How it works:**
+
+1. **Intelligent Routing**: Gemini 2.5 Flash looks at the image + query and decides if it is a `TEXT` target or an `ICON` target. It extracts search synonyms and spatial hints (e.g., "top-right" or "row 5").
+2. **Text Layer (EasyOCR)**: If the target is categorized as text, it runs EasyOCR and fuzzy matches the text variations against the screenshot.
+3. **Computer Vision Layer (OpenCV)**: If it's a visual element, it triggers OpenCV's contour blob detector to locate icons.
+4. **Spatial Filter**: It applies the spatial hint from step 1 to filter down multiple visual/text candidates across the screen to the precise single target you meant.
+
+**Examples:**
+
+```powershell
+# Search for an icon (Routes to OpenCV)
+python unified_pipeline_test.py input-images/input-icons.png "gear icon"
+
+# Search for a text button/link (Routes to EasyOCR)
+python unified_pipeline_test.py input-images/input-wikipedia.png "Create account"
+```
+
+Output will be saved to: `output-images/output-<input-name>.png`
