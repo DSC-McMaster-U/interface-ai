@@ -1,26 +1,26 @@
-version: "3.9"
-
 services:
   backend:
     build: ./backend
     ports:
       - "5000:5000"
+      - "7878:7878"
     volumes:
       - ./backend:/app
     environment:
       - REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgresql://user:password@postgres:5432/interfaceai
       - PYTHONUNBUFFERED=1
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     depends_on:
       - redis
       - postgres
 
   playwright:
     build: ./playwright
-    depends_on:
-      - backend
     environment:
       - BACKEND_URL=http://backend:5000
+    depends_on:
+      - backend
 
   vision-ai:
     build: ./vision-ai

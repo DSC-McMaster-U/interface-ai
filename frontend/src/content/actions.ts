@@ -1,6 +1,6 @@
 /**
  * Action Execution Functions
- * Browser-native equivalents of automation.js actions, adapted for Chrome extension content scripts.
+ * Browser-native action helpers for Chrome extension content scripts.
  * These run directly in the page context (no Puppeteer needed).
  */
 
@@ -54,6 +54,35 @@ export function clickByName(name: string, exactMatch = false): ActionResult {
     }
   }
   return { success: false, error: `No element found matching: "${name}"` };
+}
+
+export function goto(url: string): ActionResult {
+  const target = (url || "").trim();
+  if (!target) {
+    return { success: false, error: "Missing URL" };
+  }
+  try {
+    const normalized = /^https?:\/\//i.test(target)
+      ? target
+      : `https://${target}`;
+    window.location.href = normalized;
+    return { success: true, url: normalized };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Invalid URL",
+    };
+  }
+}
+
+export function goBack(): ActionResult {
+  window.history.back();
+  return { success: true };
+}
+
+export function goForward(): ActionResult {
+  window.history.forward();
+  return { success: true };
 }
 
 export function scrollUp(pixels = 500): ActionResult {
@@ -117,6 +146,13 @@ export function fillInput(identifier: string, value: string): ActionResult {
   }
 
   if (input) {
+    if ((input as HTMLInputElement).type?.toLowerCase() === "file") {
+      return {
+        success: false,
+        error:
+          "Target input is a file input. Use clickFileInput(identifier) and let user choose the file.",
+      };
+    }
     input.focus();
     input.value = value;
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -174,6 +210,29 @@ export function pressEnter(): ActionResult {
     );
   }
   return { success: true };
+}
+
+export function pressKey(key: string): ActionResult {
+  const k = (key || "").trim();
+  if (!k) return { success: false, error: "Missing key" };
+
+  const active = document.activeElement as HTMLElement | null;
+  const target = active || document.body;
+  target.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: k,
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  target.dispatchEvent(
+    new KeyboardEvent("keyup", {
+      key: k,
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  return { success: true, key: k };
 }
 
 export function pressEnterOn(identifier: string): ActionResult {
@@ -607,13 +666,77 @@ export async function uploadFile(
 // -------------------- PAGE STATUS --------------------
 
 export interface PageStatus {
-  success?: boolean;
+  success: boolean;
   title: string;
   url: string;
   scroll: { position: number; maxScroll: number; percent: number };
   headings: { level: string; text: string }[];
-  buttons: { text: string; disabled: boolean }[];
-  textboxes: { name: string; type: string; value: string }[];
+  buttons: {
+    id: string | null;
+    name: string | null;
+    text: string;
+    ariaLabel: string | null;
+    disabled: boolean;
+    type?: string;
+  }[];
+  textboxes: {
+    id: string | null;
+    name: string;
+    type: string;
+    value: string;
+    placeholder?: string;
+    ariaLabel?: string | null;
+  }[];
+  inputs: {
+    id: string | null;
+    name: string;
+    type: string;
+    placeholder?: string | null;
+    ariaLabel?: string | null;
+  }[];
+  searchBoxes: {
+    id: string | null;
+    name: string;
+    type: string;
+    placeholder?: string | null;
+    ariaLabel?: string | null;
+  }[];
+  fillableFields: {
+    id: string | null;
+    name: string;
+    type: string;
+    placeholder?: string | null;
+    ariaLabel?: string | null;
+  }[];
+  selects: {
+    id: string | null;
+    name: string;
+    ariaLabel: string | null;
+    options: { text: string; value: string; selected: boolean }[];
+  }[];
+  fileInputs: {
+    id: string | null;
+    name: string;
+    ariaLabel: string | null;
+    accept: string | null;
+    multiple: boolean;
+  }[];
+  sliders: {
+    id: string | null;
+    name: string;
+    min: number;
+    max: number;
+    value: number;
+  }[];
+  checkboxes: {
+    id: string | null;
+    name: string;
+    checked: boolean;
+    label: string | null;
+  }[];
+  forms: { id: string | null; action: string | null }[];
+  landmarks: { type: string; text: string }[];
+  iframes: { src: string }[];
   links: { text: string; href: string }[];
   images: { alt: string; src: string }[];
   searchBoxes: {
@@ -643,22 +766,27 @@ export interface PageStatus {
     accept: string | null;
     multiple: boolean;
   }[];
+  paragraphs: string[];
 }
 
 export function getPageStatus(): PageStatus {
   const isVisible = (el: Element): boolean => {
     const htmlEl = el as HTMLElement;
-    if (!htmlEl?.getBoundingClientRect) return false;
+    if (!htmlEl || !htmlEl.getBoundingClientRect) return false;
     const style = window.getComputedStyle(htmlEl);
     if (
       style.display === "none" ||
       style.visibility === "hidden" ||
       style.opacity === "0"
-    )
+    ) {
       return false;
+    }
     const rect = htmlEl.getBoundingClientRect();
     return rect.width > 0 && rect.height > 0;
   };
+
+  const trim = (s: string | null | undefined, n: number): string =>
+    (s || "").trim().substring(0, n);
 
   const inputs = Array.from(
     document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
@@ -681,10 +809,11 @@ export function getPageStatus(): PageStatus {
       /search/i.test(i.name) ||
       /search/i.test(i.placeholder || ""),
   );
-  const fillableFields = inputs.filter((i) =>
-    ["text", "search", "email", "password", "url", "tel", "number"].includes(
-      i.type.toLowerCase(),
-    ),
+  const fillableFields = inputs.filter(
+    (i) =>
+      ["text", "search", "email", "password", "url", "tel", "number"].includes(
+        i.type.toLowerCase(),
+      ) || i.type.toLowerCase() === "textarea",
   );
   const selects = Array.from(
     document.querySelectorAll<HTMLSelectElement>("select"),
@@ -744,26 +873,38 @@ export function getPageStatus(): PageStatus {
       .filter((b) => isVisible(b))
       .slice(0, 30)
       .map((b) => ({
+        id: b.id || null,
+        name: b.getAttribute("name"),
         text: (
           b.textContent?.trim() ||
           b.value ||
           b.getAttribute("aria-label") ||
           ""
         ).substring(0, 50),
+        ariaLabel: b.getAttribute("aria-label"),
         disabled: b.disabled,
+        type: b.type || "button",
       })),
     textboxes: Array.from(
-      document.querySelectorAll<HTMLInputElement>(
+      document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
         'input:not([type="hidden"]), textarea',
       ),
     )
       .filter((i) => isVisible(i))
       .slice(0, 20)
       .map((i) => ({
+        id: i.id || null,
         name: i.name || i.id || i.placeholder || "unnamed",
         type: i.type || "text",
         value: i.type === "password" ? "***" : (i.value || "").substring(0, 50),
+        placeholder: i.placeholder?.substring(0, 60),
+        ariaLabel: i.getAttribute("aria-label"),
       })),
+    inputs,
+    searchBoxes,
+    fillableFields,
+    selects,
+    fileInputs,
     links: Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href]"))
       .filter((a) => isVisible(a))
       .slice(0, 30)
@@ -772,6 +913,7 @@ export function getPageStatus(): PageStatus {
         href: a.href.substring(0, 100),
       })),
     images: Array.from(document.querySelectorAll<HTMLImageElement>("img[src]"))
+      .filter((i) => isVisible(i))
       .slice(0, 20)
       .map((i) => ({
         alt: (i.alt || "").substring(0, 50),
@@ -836,6 +978,71 @@ export function getWebsiteContent(): WebsiteContent {
     url: window.location.href,
     paragraphs: paragraphs.slice(0, 200),
     fullText: paragraphs.slice(0, 200).join("\n\n").substring(0, 50_000),
+    paragraphs: Array.from(document.querySelectorAll("p"))
+      .filter((p) => isVisible(p))
+      .slice(0, 20)
+      .map((p) => (p.textContent || "").trim().substring(0, 150))
+      .filter(Boolean),
+    sliders: Array.from(
+      document.querySelectorAll<HTMLInputElement>('input[type="range"]'),
+    )
+      .filter((r) => isVisible(r))
+      .slice(0, 15)
+      .map((r) => ({
+        id: r.id || null,
+        name: r.name || r.id || "unnamed",
+        min: parseFloat(r.min) || 0,
+        max: parseFloat(r.max) || 100,
+        value: parseFloat(r.value) || 0,
+      })),
+    checkboxes: Array.from(
+      document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+    )
+      .filter((c) => isVisible(c))
+      .slice(0, 25)
+      .map((c) => {
+        let label: string | null = null;
+        if (c.id) {
+          const forLabel = document.querySelector(
+            `label[for="${c.id.replace(/"/g, '\\"')}"]`,
+          );
+          if (forLabel) label = trim(forLabel.textContent, 80) || null;
+        }
+        if (!label && c.parentElement?.tagName === "LABEL") {
+          label = trim(c.parentElement.textContent, 80) || null;
+        }
+        return {
+          id: c.id || null,
+          name: c.name || c.id || "unnamed",
+          checked: !!c.checked,
+          label,
+        };
+      }),
+    forms: Array.from(document.querySelectorAll<HTMLFormElement>("form"))
+      .filter((f) => isVisible(f))
+      .slice(0, 10)
+      .map((f) => ({
+        id: f.id || null,
+        action: f.action ? f.action.substring(0, 140) : null,
+      })),
+    landmarks: Array.from(
+      document.querySelectorAll<HTMLElement>(
+        'nav, [role="navigation"], main, [role="main"], aside, [role="complementary"], header, footer',
+      ),
+    )
+      .filter((el) => isVisible(el))
+      .slice(0, 15)
+      .map((el) => ({
+        type: el.getAttribute("role") || el.tagName.toLowerCase(),
+        text: trim(el.textContent, 80),
+      })),
+    iframes: Array.from(
+      document.querySelectorAll<HTMLIFrameElement>("iframe[src]"),
+    )
+      .slice(0, 8)
+      .map((f) => ({
+        src: f.src.substring(0, 140),
+      })),
   };
 }
 
@@ -871,6 +1078,7 @@ export type ActionType =
     }
   | { type: "getPageStatus" }
   | { type: "getWebsiteContent" };
+  | { type: "getPageStatus" };
 
 export async function executeAction(
   action: ActionType,

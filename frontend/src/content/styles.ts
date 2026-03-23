@@ -133,6 +133,7 @@ export const OVERLAY_STYLES = `
     display: flex;
     flex-direction: column;
     gap: 16px;
+    min-height: 0;
   }
 
   .content::-webkit-scrollbar {
@@ -159,6 +160,7 @@ export const OVERLAY_STYLES = `
     line-height: 1.6;
     color: var(--text-primary);
     animation: fadeIn 0.3s ease;
+    min-width: 0;
   }
 
   @keyframes fadeIn {
@@ -183,6 +185,7 @@ export const OVERLAY_STYLES = `
     padding: 0;
     padding-right: 12px;
     color: #e4e4e7;
+    white-space: pre-wrap;
   }
 
   .message.error {
@@ -191,6 +194,105 @@ export const OVERLAY_STYLES = `
     padding: 10px 14px;
     border-radius: 8px;
     border: 1px solid rgba(239, 68, 68, 0.2);
+  }
+
+  .tool-event {
+    align-self: stretch;
+    width: 100%;
+    max-width: none;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 0;
+    overflow: hidden;
+    padding-right: 0;
+    flex: 0 0 auto;
+  }
+
+  .tool-event[open] {
+    background: rgba(255, 255, 255, 0.055);
+    resize: vertical;
+    overflow: auto;
+    min-height: 120px;
+    max-height: 70vh;
+  }
+
+  .tool-event[data-status="rejected"] {
+    border-color: rgba(239, 68, 68, 0.35);
+  }
+
+  .tool-event[data-status="approved"],
+  .tool-event[data-status="auto-approved"],
+  .tool-event[data-status="done"] {
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .tool-summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: #f4f4f5;
+    font-size: 12px;
+    min-width: 0;
+    user-select: none;
+  }
+
+  .tool-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .tool-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  .tool-meta {
+    flex: 0 0 auto;
+    color: #a1a1aa;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .tool-body {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 8px 10px;
+    display: grid;
+    gap: 6px;
+    background: rgba(0, 0, 0, 0.18);
+    min-width: 0;
+  }
+
+  .tool-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #a1a1aa;
+  }
+
+  .tool-pre {
+    margin: 0;
+    padding: 8px;
+    min-height: 88px;
+    max-height: 320px;
+    overflow: auto;
+    resize: vertical;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.25);
+    color: #e4e4e7;
+    font-size: 11px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
 
   /* Input area */
