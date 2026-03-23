@@ -17,7 +17,7 @@ function sendWsMessage(payload: Record<string, unknown>): void {
   ws.send(JSON.stringify(payload));
 }
 
-function handleWsMessage(raw: string): void {
+async function handleWsMessage(raw: string): Promise<void> {
   let msg: Record<string, unknown>;
   try {
     msg = JSON.parse(raw) as Record<string, unknown>;
@@ -40,10 +40,10 @@ function handleWsMessage(raw: string): void {
 
   let result: Record<string, unknown>;
   try {
-    result = executeAction({
+    result = (await executeAction({
       type: action,
       ...(params || {}),
-    } as never) as Record<string, unknown>;
+    } as never)) as unknown as Record<string, unknown>;
   } catch (error) {
     result = {
       success: false,
