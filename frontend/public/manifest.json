@@ -10,7 +10,7 @@
   "icons": {
     "128": "logo_128.png"
   },
-  "permissions": ["activeTab", "scripting", "tabs", "downloads"],
+  "permissions": ["activeTab", "scripting", "tabs", "downloads", "storage"],
   "host_permissions": ["http://localhost:5000/*", "<all_urls>", "file:///*"],
   "background": {
     "service_worker": "background.js",

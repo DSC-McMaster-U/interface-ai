@@ -258,6 +258,48 @@ export function typeText(text: string): ActionResult {
   return { success: false, error: "No active input element to type into" };
 }
 
+export function goto(url: string): ActionResult {
+  const target = (url || "").trim();
+  if (!target) return { success: false, error: "Missing URL" };
+  try {
+    const normalized = /^https?:\/\//i.test(target)
+      ? target
+      : `https://${target}`;
+    window.location.href = normalized;
+    return { success: true, url: normalized };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Invalid URL",
+    };
+  }
+}
+
+export function goBack(): ActionResult {
+  window.history.back();
+  return { success: true };
+}
+
+export function goForward(): ActionResult {
+  window.history.forward();
+  return { success: true };
+}
+
+export function pressKey(key: string): ActionResult {
+  const k = (key || "").trim();
+  if (!k) return { success: false, error: "Missing key" };
+
+  const active = document.activeElement as HTMLElement | null;
+  const target = active || document.body;
+  target.dispatchEvent(
+    new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }),
+  );
+  target.dispatchEvent(
+    new KeyboardEvent("keyup", { key: k, bubbles: true, cancelable: true }),
+  );
+  return { success: true, key: k };
+}
+
 export function selectOption(identifier: string, value: string): ActionResult {
   const lower = identifier.toLowerCase();
 
@@ -565,6 +607,7 @@ export async function uploadFile(
 // -------------------- PAGE STATUS --------------------
 
 export interface PageStatus {
+  success?: boolean;
   title: string;
   url: string;
   scroll: { position: number; maxScroll: number; percent: number };
@@ -573,10 +616,108 @@ export interface PageStatus {
   textboxes: { name: string; type: string; value: string }[];
   links: { text: string; href: string }[];
   images: { alt: string; src: string }[];
+  searchBoxes: {
+    id: string | null;
+    name: string;
+    type: string;
+    placeholder?: string | null;
+    ariaLabel?: string | null;
+  }[];
+  fillableFields: {
+    id: string | null;
+    name: string;
+    type: string;
+    placeholder?: string | null;
+    ariaLabel?: string | null;
+  }[];
+  selects: {
+    id: string | null;
+    name: string;
+    ariaLabel: string | null;
+    options: { text: string; value: string; selected: boolean }[];
+  }[];
+  fileInputs: {
+    id: string | null;
+    name: string;
+    ariaLabel: string | null;
+    accept: string | null;
+    multiple: boolean;
+  }[];
 }
 
 export function getPageStatus(): PageStatus {
+  const isVisible = (el: Element): boolean => {
+    const htmlEl = el as HTMLElement;
+    if (!htmlEl?.getBoundingClientRect) return false;
+    const style = window.getComputedStyle(htmlEl);
+    if (
+      style.display === "none" ||
+      style.visibility === "hidden" ||
+      style.opacity === "0"
+    )
+      return false;
+    const rect = htmlEl.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  };
+
+  const inputs = Array.from(
+    document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+      'input:not([type="hidden"]), textarea',
+    ),
+  )
+    .filter((i) => isVisible(i))
+    .slice(0, 30)
+    .map((i) => ({
+      id: i.id || null,
+      name: i.name || i.id || i.placeholder || "unnamed",
+      type: i.type || "text",
+      placeholder: i.placeholder?.substring(0, 60) || null,
+      ariaLabel: i.getAttribute("aria-label"),
+    }));
+
+  const searchBoxes = inputs.filter(
+    (i) =>
+      i.type.toLowerCase() === "search" ||
+      /search/i.test(i.name) ||
+      /search/i.test(i.placeholder || ""),
+  );
+  const fillableFields = inputs.filter((i) =>
+    ["text", "search", "email", "password", "url", "tel", "number"].includes(
+      i.type.toLowerCase(),
+    ),
+  );
+  const selects = Array.from(
+    document.querySelectorAll<HTMLSelectElement>("select"),
+  )
+    .filter((s) => isVisible(s))
+    .slice(0, 15)
+    .map((s) => ({
+      id: s.id || null,
+      name: s.name || s.id || "unnamed",
+      ariaLabel: s.getAttribute("aria-label"),
+      options: Array.from(s.options)
+        .slice(0, 20)
+        .map((o) => ({
+          text: o.text.trim().substring(0, 80),
+          value: o.value.substring(0, 120),
+          selected: o.selected,
+        })),
+    }));
+  const fileInputs = Array.from(
+    document.querySelectorAll<HTMLInputElement>('input[type="file"]'),
+  )
+    .filter((f) => isVisible(f))
+    .slice(0, 15)
+    .map((f) => ({
+      id: f.id || null,
+      name: f.name || f.id || "unnamed",
+      ariaLabel: f.getAttribute("aria-label"),
+      accept: f.accept || null,
+      multiple: !!f.multiple,
+    }));
+
   return {
+    success: true,
     title: document.title,
     url: window.location.href,
     scroll: {
@@ -589,6 +730,7 @@ export function getPageStatus(): PageStatus {
         ) || 0,
     },
     headings: Array.from(document.querySelectorAll("h1,h2,h3"))
+      .filter((h) => isVisible(h))
       .slice(0, 20)
       .map((h) => ({
         level: h.tagName,
@@ -599,6 +741,7 @@ export function getPageStatus(): PageStatus {
         'button, [role="button"], input[type="submit"]',
       ),
     )
+      .filter((b) => isVisible(b))
       .slice(0, 30)
       .map((b) => ({
         text: (
@@ -614,6 +757,7 @@ export function getPageStatus(): PageStatus {
         'input:not([type="hidden"]), textarea',
       ),
     )
+      .filter((i) => isVisible(i))
       .slice(0, 20)
       .map((i) => ({
         name: i.name || i.id || i.placeholder || "unnamed",
@@ -621,6 +765,7 @@ export function getPageStatus(): PageStatus {
         value: i.type === "password" ? "***" : (i.value || "").substring(0, 50),
       })),
     links: Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href]"))
+      .filter((a) => isVisible(a))
       .slice(0, 30)
       .map((a) => ({
         text: (a.textContent || "").trim().substring(0, 50),
@@ -632,6 +777,10 @@ export function getPageStatus(): PageStatus {
         alt: (i.alt || "").substring(0, 50),
         src: i.src.substring(0, 100),
       })),
+    searchBoxes,
+    fillableFields,
+    selects,
+    fileInputs,
   };
 }
 
@@ -695,6 +844,9 @@ export function getWebsiteContent(): WebsiteContent {
 export type ActionType =
   | { type: "clickAtCoordinate"; x: number; y: number }
   | { type: "clickByName"; name: string; exactMatch?: boolean }
+  | { type: "goto"; url: string }
+  | { type: "goBack" }
+  | { type: "goForward" }
   | { type: "scrollUp"; pixels?: number }
   | { type: "scrollDown"; pixels?: number }
   | { type: "scrollToTop" }
@@ -702,10 +854,12 @@ export type ActionType =
   | { type: "fillInput"; identifier: string; value: string }
   | { type: "clickFirstSearchResult" }
   | { type: "pressEnter" }
+  | { type: "pressKey"; key: string }
   | { type: "pressEnterOn"; identifier: string }
   | { type: "typeText"; text: string }
   | { type: "selectOption"; identifier: string; value: string }
   | { type: "clickFileInput"; identifier: string }
+  | { type: "ping" }
   | {
       type: "uploadFile";
       /** Label/name/id of the file input element */
@@ -726,6 +880,12 @@ export async function executeAction(
       return clickAtCoordinate(action.x, action.y);
     case "clickByName":
       return clickByName(action.name, action.exactMatch);
+    case "goto":
+      return goto(action.url);
+    case "goBack":
+      return goBack();
+    case "goForward":
+      return goForward();
     case "scrollUp":
       return scrollUp(action.pixels);
     case "scrollDown":
@@ -740,6 +900,8 @@ export async function executeAction(
       return clickFirstSearchResult();
     case "pressEnter":
       return pressEnter();
+    case "pressKey":
+      return pressKey(action.key);
     case "pressEnterOn":
       return pressEnterOn(action.identifier);
     case "typeText":
@@ -748,6 +910,8 @@ export async function executeAction(
       return selectOption(action.identifier, action.value);
     case "clickFileInput":
       return clickFileInput(action.identifier);
+    case "ping":
+      return { success: true, pong: true };
     case "uploadFile":
       return uploadFile(action.identifier, action.filePath, action.keyword);
     case "getPageStatus":
@@ -765,6 +929,12 @@ export function describeAction(action: ActionType): string {
       return `Click at (${action.x}, ${action.y})`;
     case "clickByName":
       return `Click "${action.name}"`;
+    case "goto":
+      return `Go to ${action.url}`;
+    case "goBack":
+      return "Go back";
+    case "goForward":
+      return "Go forward";
     case "scrollUp":
       return `Scroll up ${action.pixels ?? 500}px`;
     case "scrollDown":
@@ -779,6 +949,8 @@ export function describeAction(action: ActionType): string {
       return "Click first search result";
     case "pressEnter":
       return "Press Enter";
+    case "pressKey":
+      return `Press key "${action.key}"`;
     case "pressEnterOn":
       return `Press Enter on "${action.identifier}"`;
     case "typeText":
@@ -787,6 +959,8 @@ export function describeAction(action: ActionType): string {
       return `Select "${action.value}" in "${action.identifier}"`;
     case "clickFileInput":
       return `Open file picker for "${action.identifier}"`;
+    case "ping":
+      return "Ping";
     case "uploadFile":
       if (action.keyword) {
         return `Search page for "${action.keyword}" and select file for "${action.identifier}"`;
