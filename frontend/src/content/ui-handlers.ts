@@ -98,7 +98,7 @@ const HELP_TEXT = `Available commands:
 /goto <url>                      — navigate to URL
 /coord <x> <y>                   — click at screen coordinates
 /select <field> <option>         — choose a dropdown option by text
-/upload <field> <path>           — attach a file by path or URL to a file input
+/upload <field> <file>           — search for file by name and attach to a file input
 /upload <field> keyword:<term>   — search page for <term> and click matching file
 /content                         — extract readable text content from the page
 /result                          — click first search result
@@ -296,36 +296,31 @@ async function handleCommand(
     case "upload": {
       if (!argParts[0]) {
         fail(
-          'Usage: /upload <field> <path|URL>  or  /upload <field> keyword:<term>',
+          'Usage: /upload <field> <file>  or  /upload <field> keyword:<term>',
         );
         return true;
       }
       const field = argParts[0];
       const rest = argParts.slice(1).join(" ");
       if (!rest) {
-        // No path given — fall back to opening the native file picker
+        // No filename given — open the native file picker directly
         report(clickFileInput(field), `Open file picker for "${field}"`);
         return true;
       }
-      // Explicit keyword: prefix or auto-detect (no path separators / drive letter / http)
       const kwMatch = rest.match(/^keyword:(.+)$/i);
       const keyword = kwMatch ? kwMatch[1].trim() : rest;
-      const isPath =
-        !kwMatch &&
-        (/^https?:\/\//i.test(rest) ||
-          /^[a-zA-Z]:[/\\]/.test(rest) ||
-          rest.startsWith("/") ||
-          rest.startsWith("./") ||
-          rest.startsWith("..\\"));
-      if (isPath) {
-        uploadFile(field, rest).then((r) =>
-          report(r, `Upload "${rest}" to "${field}"`),
-        );
-      } else {
-        uploadFile(field, undefined, keyword).then((r) =>
-          report(r, `Search for "${keyword}" and attach to "${field}"`),
-        );
-      }
+      uploadFile(field, undefined, keyword).then((r) => {
+        if (!r.success) {
+          // File not found — open the native file picker so user can select manually
+          addMsg(
+            `Could not find "${keyword}" automatically. Opening file picker so you can select it manually.`,
+            "assistant",
+          );
+          report(clickFileInput(field), `Open file picker for "${field}"`);
+        } else {
+          report(r, `Search for "${keyword}" and attach to "${field}"`);
+        }
+      });
       return true;
     }
 

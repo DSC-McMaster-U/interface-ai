@@ -280,8 +280,7 @@ async function findAndFetchFile(fileName: string): Promise<ApiResponse> {
     error:
       `"${fileName}" not found. Searched Chrome download history, ` +
       `${homeDir ? `${homeDir}/[Downloads|Documents|Desktop|Pictures|Videos]` : "common user directories"}, ` +
-      `and directory listings. If the file is in a custom location, use the full path: ` +
-      `/upload <field> C:\\full\\path\\to\\${fileName}`,
+      `and directory listings.`,
   };
 }
 
