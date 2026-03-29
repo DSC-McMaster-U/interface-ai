@@ -17,12 +17,16 @@ import {
 import {
   SETTINGS_STYLES,
   renderSettings,
+  renderSignIn,
   setupSettingsListeners,
   fetchUserSettings,
   updateUserSettings,
+  requestGoogleSignIn,
+  requestGoogleSignOut,
+  getAuthState,
 } from "./settings";
 import { TEST_PANEL_STYLES, setupTestPanel } from "./test-panel";
-import type { UserSettings } from "./types";
+import type { UserSettings, AuthUser } from "./types";
 
 export class InterfaceAIOverlay {
   private shadowRoot: ShadowRoot | null = null;
@@ -33,6 +37,7 @@ export class InterfaceAIOverlay {
   private resizeStart = { width: 0, height: 0, x: 0, y: 0 };
 
   private readonly visibilityStorageKey = "interface_ai_overlay_hidden";
+  private authUser: AuthUser | null = null;
 
   constructor() {
     this.init();
@@ -192,10 +197,56 @@ export class InterfaceAIOverlay {
     chatView.classList.add("hidden");
     settingsView.classList.remove("hidden");
 
-    // Fetch user settings
+    // Check auth state first
+    this.authUser = await getAuthState();
+
+    if (!this.authUser) {
+      // Not signed in – show sign-in screen
+      renderSignIn(this.shadowRoot, () => this.handleSignIn());
+      return;
+    }
+
+    // Signed in – fetch and show profile
+    await this.loadAndRenderProfile();
+  }
+
+  private async handleSignIn(): Promise<void> {
+    const settingsContent = this.shadowRoot?.getElementById("settings-content");
+    if (settingsContent) {
+      settingsContent.innerHTML = `
+        <div class="settings-loading">
+          <div class="loading-dots"><span></span><span></span><span></span></div>
+          <span style="font-size: 13px; margin-top: 8px; display: block;">Signing in...</span>
+        </div>
+      `;
+    }
+
+    const result = await requestGoogleSignIn();
+    if (result.user) {
+      this.authUser = result.user;
+      await this.loadAndRenderProfile();
+    } else {
+      // Sign-in failed or cancelled, show sign-in again with error
+      renderSignIn(
+        this.shadowRoot,
+        () => this.handleSignIn(),
+        result.error || "Sign-in failed. Please try again.",
+      );
+    }
+  }
+
+  private async handleSignOut(): Promise<void> {
+    await requestGoogleSignOut();
+    this.authUser = null;
+    renderSignIn(this.shadowRoot, () => this.handleSignIn());
+  }
+
+  private async loadAndRenderProfile(): Promise<void> {
     const settings = await fetchUserSettings();
     if (settings) {
-      renderSettings(this.shadowRoot, settings);
+      renderSettings(this.shadowRoot, settings, this.authUser, () =>
+        this.handleSignOut(),
+      );
 
       // Setup event listeners for editing
       setupSettingsListeners(
@@ -223,7 +274,9 @@ export class InterfaceAIOverlay {
   ): Promise<void> {
     const success = await updateUserSettings(updatedSettings);
     if (success) {
-      renderSettings(this.shadowRoot, updatedSettings);
+      renderSettings(this.shadowRoot, updatedSettings, this.authUser, () =>
+        this.handleSignOut(),
+      );
       setupSettingsListeners(this.shadowRoot, updatedSettings, async (s) => {
         await this.handleSettingsUpdate(s);
       });
