@@ -336,6 +336,11 @@ def run_architecture_1(
         return tracked_send("pressKey", {"key": key})
 
     @tool
+    def pressEnterOn(identifier: str) -> dict[str, Any]:
+        """Press Enter on a specific input field by identifier."""
+        return tracked_send("pressEnterOn", {"identifier": identifier})
+
+    @tool
     def typeText(text: str) -> dict[str, Any]:
         """Type text into active element."""
         return tracked_send("typeText", {"text": text})
@@ -346,9 +351,46 @@ def run_architecture_1(
         return tracked_send("selectOption", {"identifier": identifier, "value": value})
 
     @tool
+    def setCheckbox(identifier: str, checked: bool = True) -> dict[str, Any]:
+        """Check or uncheck a checkbox by field identifier or label."""
+        return tracked_send(
+            "setCheckbox", {"identifier": identifier, "checked": checked}
+        )
+
+    @tool
+    def selectRadio(identifier: str, value: str) -> dict[str, Any]:
+        """Choose a radio option within a radio group by group identifier and option value/label."""
+        return tracked_send("selectRadio", {"identifier": identifier, "value": value})
+
+    @tool
     def clickFileInput(identifier: str) -> dict[str, Any]:
         """Open file picker by file input identifier."""
         return tracked_send("clickFileInput", {"identifier": identifier})
+
+    @tool
+    def uploadFile(
+        identifier: str, filePath: str = "", keyword: str = ""
+    ) -> dict[str, Any]:
+        """Upload a file from the local machine. Use a full path/URL when known, or use keyword/file name to search Chrome downloads first and then common local folders."""
+        payload: dict[str, Any] = {"identifier": identifier}
+        if filePath.strip():
+            payload["filePath"] = filePath
+        if keyword.strip():
+            payload["keyword"] = keyword
+        return tracked_send("uploadFile", payload)
+
+    @tool
+    def uploadFileInDom(identifier: str, keyword: str) -> dict[str, Any]:
+        """Pick a file entry that already appears inside a web-based file picker or page DOM. Do not use this for laptop/local file uploads."""
+        return tracked_send(
+            "uploadFileInDom",
+            {"identifier": identifier, "keyword": keyword},
+        )
+
+    @tool
+    def getWebsiteContent() -> dict[str, Any]:
+        """Extract the readable text content from the current page/article."""
+        return tracked_send("getWebsiteContent", {})
 
     @tool
     def requestUserInput(
@@ -438,9 +480,15 @@ def run_architecture_1(
         getPageStatus,
         clickFirstSearchResult,
         pressKey,
+        pressEnterOn,
         typeText,
         selectOption,
+        setCheckbox,
+        selectRadio,
         clickFileInput,
+        uploadFile,
+        uploadFileInDom,
+        getWebsiteContent,
         requestUserInput,
         getUserToUnblock,
         getUserMemory,
@@ -480,12 +528,21 @@ def run_architecture_1(
             content=(
                 "You are a browser automation agent. Use tools to complete the goal. "
                 "Call one tool at a time. If a tool fails, you must try a different approach. "
-                "Use getPageStatus often; it includes dropdowns (selects) and file inputs when present. "
-                "Do not say done until completion is verified from getPageStatus. "
+                "Use getPageStatus often; it tells you what inputs, textareas, buttons, checkboxes, radios, dropdowns, file inputs, links, forms, and other visible elements are on the page. "
+                "Use getPageStatus as your inventory of what you can interact with before choosing tools. "
+                "Use fillInput for text-like fields, setCheckbox for checkboxes, selectRadio for radio groups, selectOption for dropdowns, and uploadFile/clickFileInput for file inputs. "
+                "Use getWebsiteContent when the task depends on reading the actual content of an article, documentation page, Wikipedia page, or long webpage prose instead of just interactive elements. "
+                "If the user asks what a page says, asks for a summary, asks for key points, asks for facts from an article, or asks you to report information from a webpage, you should navigate to the page, call getWebsiteContent, and then answer using the extracted text. "
+                "For reading/reporting tasks, do not rely on getPageStatus alone because it mostly describes the page structure rather than the article text. "
+                "Use uploadFile for laptop/local file uploads. If the user gives a full path or URL, pass it as filePath. If the user gives a filename or partial file name, pass it as keyword so the extension searches Chrome downloads first and then common local folders. "
+                "Use uploadFileInDom only when the website itself shows an in-page file picker or list of files and you need to click a matching file item already visible in the page. "
+                "Use clickFileInput only when the user must manually pick a file from the native chooser. "
+                "For interactive browser tasks, do not say done until completion is verified from getPageStatus. "
+                "For reading/reporting tasks, do not say done until you have actually extracted the page text with getWebsiteContent and provided the requested summary or facts. "
                 "Always continue going and calling tools until the goal is complete; do not stop midway. "
                 "Be persistent and try different approaches if you fail. "
                 "Use requestUserInput only when the task cannot safely continue without task-critical user-specific data or a critical choice that cannot be inferred from the goal or page. "
-                "Use getUserToUnblock when you are stuck because the user must manually do something in the UI, such as upload a file, solve a login/CAPTCHA issue, or complete a blocking step you cannot do. "
+                "Use getUserToUnblock when you are stuck because the user must manually do something in the UI, such as solve a login/CAPTCHA issue or complete a blocking step you cannot do. "
                 "Ask for the exact unblock action in one short instruction and wait for the user to confirm it is done. "
                 "Do not ask for low-stakes ambiguities when a reasonable default is acceptable. "
                 "Use getUserMemory before asking for details that may already be known, like the user's name or location. "
@@ -494,6 +551,7 @@ def run_architecture_1(
                 "If a button press, page, or flow is not moving you forward, stop repeating it. Inspect the page, try a different route, or ask the user to unblock you. "
                 "Example: for 'play minecraft vid', do not ask what site to use; just choose a reasonable place like YouTube and proceed. "
                 "Example: for a job application, if the form requires personal details like legal name, phone number, or a specific internship choice that is not clearly determined, ask a single precise question with requestUserInput. "
+                "Example: for 'open this Wikipedia page and summarize it', navigate there, call getWebsiteContent, then provide the summary based on the extracted text. "
             )
         ),
         HumanMessage(content=f"Goal: {goal}"),
@@ -591,13 +649,23 @@ def run_architecture_1(
                 SystemMessage(
                     content=(
                         "Decide if the user's browser task is complete based only on goal and page status. "
+                        "Also consider the latest agent response and recent tool usage. "
                         "Be strict and conservative: done=true only when the goal outcome is clearly achieved. "
+                        "For reading/reporting tasks like summarizing an article or extracting facts from a webpage, "
+                        "done=true only if the agent has already used getWebsiteContent or otherwise extracted the page text "
+                        "and has already delivered the requested summary or facts in its response. "
+                        "For interactive tasks, page status is the main source of truth. "
                         "Respond as strict JSON only: "
                         '{"done": true|false, "reason": "...", "next_step_hint": "..."}.'
                     )
                 ),
                 HumanMessage(
-                    content=f"Goal: {goal}\nLatest page status JSON: {verify_context}"
+                    content=(
+                        f"Goal: {goal}\n"
+                        f"Latest page status JSON: {verify_context}\n"
+                        f"Latest agent response: {last_agent_text[:2000]}\n"
+                        f"Recent action trace: {json.dumps(action_trace[-8:], ensure_ascii=True)[:4000]}"
+                    )
                 ),
             ],
         )

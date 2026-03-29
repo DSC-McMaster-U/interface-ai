@@ -10,6 +10,7 @@ import {
   getPageStatus,
   getWebsiteContent,
   uploadFile,
+  uploadFileInDom,
   clickAtCoordinate,
   clickByName,
   clickFirstSearchResult,
@@ -20,9 +21,14 @@ import {
   fillInput,
   pressEnter,
   pressEnterOn,
+  pressKey,
   typeText,
   selectOption,
+  setCheckbox,
+  selectRadio,
   clickFileInput,
+  goBack,
+  goForward,
 } from "./actions";
 import type { ActionType, ActionResult, PageStatus } from "./actions";
 
@@ -430,10 +436,17 @@ const HELP_TEXT = `Available commands:
 /scroll top                      — scroll to top
 /scroll bottom                   — scroll to bottom
 /goto <url>                      — navigate to URL
+/back                            — go back in browser history
+/forward                         — go forward in browser history
+/key <name>                      — press a key like Tab or Escape
 /coord <x> <y>                   — click at screen coordinates
 /select <field> <option>         — choose a dropdown option by text
-/upload <field> <file>           — search for file by name and attach to a file input
-/upload <field> keyword:<term>   — search page for <term> and click matching file
+/check <field>                   — check a checkbox
+/uncheck <field>                 — uncheck a checkbox
+/radio <group> <option>          — choose a radio option
+/upload <field> <file>           — attach by full path/url or by downloaded filename
+/upload <field> keyword:<term>   — search local downloads/common folders by file name
+/upload-dom <field> <term>       — click a matching file entry inside a web picker page
 /content                         — extract readable text content from the page
 /result                          — click first search result
 /status                          — show page info
@@ -582,6 +595,25 @@ async function handleCommand(
       return true;
     }
 
+    case "back": {
+      report(goBack(), "Go back");
+      return true;
+    }
+
+    case "forward": {
+      report(goForward(), "Go forward");
+      return true;
+    }
+
+    case "key": {
+      if (!args) {
+        fail("Usage: /key <name>");
+        return true;
+      }
+      report(pressKey(args), `Press key "${args}"`);
+      return true;
+    }
+
     case "coord": {
       const x = parseFloat(argParts[0]);
       const y = parseFloat(argParts[1]);
@@ -609,6 +641,35 @@ async function handleCommand(
       return true;
     }
 
+    case "check": {
+      if (!args) {
+        fail("Usage: /check <field>");
+        return true;
+      }
+      report(setCheckbox(args, true), `Check "${args}"`);
+      return true;
+    }
+
+    case "uncheck": {
+      if (!args) {
+        fail("Usage: /uncheck <field>");
+        return true;
+      }
+      report(setCheckbox(args, false), `Uncheck "${args}"`);
+      return true;
+    }
+
+    case "radio": {
+      if (!argParts[0] || argParts.length < 2) {
+        fail("Usage: /radio <group> <option>");
+        return true;
+      }
+      const group = argParts[0];
+      const option = argParts.slice(1).join(" ");
+      report(selectRadio(group, option), `Select radio "${option}" in "${group}"`);
+      return true;
+    }
+
     case "upload": {
       if (!argParts[0]) {
         fail(
@@ -619,24 +680,48 @@ async function handleCommand(
       const field = argParts[0];
       const rest = argParts.slice(1).join(" ");
       if (!rest) {
-        // No filename given — open the native file picker directly
         report(clickFileInput(field), `Open file picker for "${field}"`);
         return true;
       }
+
       const kwMatch = rest.match(/^keyword:(.+)$/i);
-      const keyword = kwMatch ? kwMatch[1].trim() : rest;
-      uploadFile(field, undefined, keyword).then((r) => {
+      const keyword = kwMatch?.[1]?.trim();
+      const looksLikePath =
+        /^[A-Za-z]:[\\/]/.test(rest) ||
+        rest.startsWith("/") ||
+        rest.startsWith("./") ||
+        rest.startsWith("../") ||
+        /^https?:\/\//i.test(rest) ||
+        rest.includes("\\");
+
+      uploadFile(field, looksLikePath ? rest : undefined, keyword ?? (!looksLikePath ? rest : undefined)).then((r) => {
         if (!r.success) {
-          // File not found — open the native file picker so user can select manually
           addMsg(
-            `Could not find "${keyword}" automatically. Opening file picker so you can select it manually.`,
+            `Could not attach "${rest}" automatically. Opening file picker so you can select it manually.`,
             "assistant",
           );
           report(clickFileInput(field), `Open file picker for "${field}"`);
         } else {
-          report(r, `Search for "${keyword}" and attach to "${field}"`);
+          const label = looksLikePath
+            ? `Upload "${rest}" to "${field}"`
+            : `Attach "${keyword ?? rest}" to "${field}"`;
+          report(r, label);
         }
       });
+      return true;
+    }
+
+    case "upload-dom": {
+      if (!argParts[0] || argParts.length < 2) {
+        fail("Usage: /upload-dom <field> <term>");
+        return true;
+      }
+      const field = argParts[0];
+      const term = argParts.slice(1).join(" ");
+      report(
+        uploadFileInDom(field, term),
+        `Pick in-page file "${term}" for "${field}"`,
+      );
       return true;
     }
 
