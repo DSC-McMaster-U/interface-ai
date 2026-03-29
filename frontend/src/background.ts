@@ -4,7 +4,7 @@
  */
 
 // URL for the backend API
-const BACKEND_API = "http://localhost:5050";
+const BACKEND_API = "http://localhost:5000";
 
 /**
  * Message types for communication with content scripts
@@ -267,6 +267,140 @@ async function updateUserSettings(
         error instanceof Error ? error.message : "Failed to update settings",
     };
   }
+}
+
+/**
+ * Advanced file search: sweeps Chrome history, home directory, and common
+ * subdirectories. Handles files not in Chrome's download history.
+ */
+async function findAndFetchFile(fileName: string): Promise<ApiResponse> {
+  async function blobToDataUrl(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("FileReader failed"));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function tryFetch(fileUrl: string): Promise<string | null> {
+    try {
+      const r = await fetch(fileUrl);
+      if (!r.ok) return null;
+      return blobToDataUrl(await r.blob());
+    } catch {
+      return null;
+    }
+  }
+
+  // ── Strategy 1: chrome.downloads history search ──────────────────────────
+  // Escape special regex chars in the filename, then search download history.
+  const escaped = fileName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const dlItems = await new Promise<chrome.downloads.DownloadItem[]>(
+    (resolve) => chrome.downloads.search({ filenameRegex: escaped }, resolve),
+  );
+
+  // Sort newest first and prefer completed items
+  const sorted = dlItems
+    .filter((i) => i.exists !== false)
+    .sort(
+      (a, b) =>
+        new Date(b.startTime).getTime() - new Date(a.startTime).getTime(),
+    );
+
+  for (const item of sorted) {
+    const fileUrl = `file:///${item.filename.replace(/\\/g, "/")}`;
+    const dataUrl = await tryFetch(fileUrl);
+    if (dataUrl) {
+      console.log("[InterfaceAI] Found via downloads API:", item.filename);
+      return { success: true, data: dataUrl };
+    }
+  }
+
+  // ── Strategy 2: infer home directory from any download history item ───────
+  // Anyone who has used Chrome has at least one download. Its path reveals the
+  // exact OS username, letting us sweep common folders without directory listing.
+  async function getHomeDir(): Promise<string | null> {
+    const items = await new Promise<chrome.downloads.DownloadItem[]>(
+      (resolve) => chrome.downloads.search({ limit: 20 }, resolve),
+    );
+    for (const item of items) {
+      const p = item.filename.replace(/\\/g, "/");
+      const m =
+        p.match(/^([A-Za-z]:\/Users\/[^/]+)\//) ?? // Windows
+        p.match(/^(\/home\/[^/]+)\//) ?? // Linux
+        p.match(/^(\/Users\/[^/]+)\//); // macOS
+      if (m) return m[1];
+    }
+    return null;
+  }
+
+  const subDirs = ["Downloads", "Documents", "Desktop", "Pictures", "Videos", ""];
+  const homeDir = await getHomeDir();
+
+  if (homeDir) {
+    for (const sub of subDirs) {
+      const fileUrl = sub
+        ? `file:///${homeDir.replace(/^\//, "")}/${sub}/${fileName}`
+        : `file:///${homeDir.replace(/^\//, "")}/${fileName}`;
+      const dataUrl = await tryFetch(fileUrl);
+      if (dataUrl) {
+        console.log("[InterfaceAI] Found via home dir sweep:", fileUrl);
+        return { success: true, data: dataUrl };
+      }
+    }
+  }
+
+  // ── Strategy 3: directory listing sweep (last resort) ────────────────────
+  async function listDir(dirUrl: string): Promise<string[]> {
+    try {
+      const r = await fetch(dirUrl);
+      if (!r.ok) return [];
+      const html = await r.text();
+      const names: string[] = [];
+      for (const m of html.matchAll(/<a\b[^>]*href="([^"]+)"/gi)) {
+        const href = decodeURIComponent(m[1]).replace(/\/$/, "");
+        if (!href || href.startsWith("?") || href.startsWith("#")) continue;
+        const parts = href.split("/").filter(Boolean);
+        const name = parts[parts.length - 1];
+        if (name && name !== ".." && name !== "." && !name.endsWith(":")) {
+          names.push(name);
+        }
+      }
+      return [...new Set(names)];
+    } catch {
+      return [];
+    }
+  }
+
+  const systemRoots = ["file:///C:/Users/", "file:///home/", "file:///Users/"];
+  const skipFolders = new Set(["Public", "All Users", "Default", "Default User"]);
+
+  for (const root of systemRoots) {
+    const userFolders = await listDir(root);
+    for (const user of userFolders) {
+      if (skipFolders.has(user)) continue;
+      const userBase = `${root}${user}`;
+      for (const sub of subDirs) {
+        const fileUrl = sub
+          ? `${userBase}/${sub}/${fileName}`
+          : `${userBase}/${fileName}`;
+        const dataUrl = await tryFetch(fileUrl);
+        if (dataUrl) {
+          console.log("[InterfaceAI] Found via directory listing sweep:", fileUrl);
+          return { success: true, data: dataUrl };
+        }
+      }
+    }
+  }
+
+  return {
+    success: false,
+    error:
+      `"${fileName}" not found. Searched Chrome download history, ` +
+      `${homeDir ? `${homeDir}/[Downloads|Documents|Desktop|Pictures|Videos]` : "common user directories"}, ` +
+      `and directory listings.`,
+  };
 }
 
 /**
