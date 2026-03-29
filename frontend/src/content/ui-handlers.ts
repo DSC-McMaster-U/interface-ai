@@ -2,8 +2,31 @@
  * UI interaction handlers (messages, loading, input)
  */
 
-import type { ApiResponse } from "./types";
+import type { ApiRequestMessage, ApiResponse, ChatApiResponse } from "./types";
 import { parseCommand, summarizeResult } from "./command-parser";
+import {
+  executeAction,
+  describeAction,
+  getPageStatus,
+  getWebsiteContent,
+  uploadFile,
+  clickAtCoordinate,
+  clickByName,
+  clickFirstSearchResult,
+  scrollUp,
+  scrollDown,
+  scrollToTop,
+  scrollToBottom,
+  fillInput,
+  pressEnter,
+  pressEnterOn,
+  typeText,
+  selectOption,
+  clickFileInput,
+} from "./actions";
+import type { ActionType, ActionResult, PageStatus } from "./actions";
+
+// -------------------- TYPES --------------------
 
 type ChatMessage = {
   text: string;
@@ -22,8 +45,12 @@ type ToolCard = {
   status: "pending" | "approved" | "rejected" | "done";
 };
 
+// -------------------- STATE --------------------
+
 const CHAT_STORAGE_KEY = "interface_ai_chat_messages";
 const pendingToolCards: ToolCard[] = [];
+
+// -------------------- STORAGE --------------------
 
 function storageGet<T>(key: string): Promise<T | undefined> {
   return new Promise((resolve) => {
@@ -70,6 +97,8 @@ export async function restoreMessages(
   }
 }
 
+// -------------------- MESSAGE HELPERS --------------------
+
 /**
  * Add a message to the chat container
  */
@@ -87,11 +116,10 @@ export function addMessage(
       ? renderToolEventMessage(container, text) ||
         renderUserInputEventMessage(container, text)
       : false;
+
   if (toolHandled) {
     if (persist) {
-      appendPersistedMessage({ text, type }).catch(() => {
-        // ignore storage failures
-      });
+      appendPersistedMessage({ text, type }).catch(() => {});
     }
     container.scrollTop = container.scrollHeight;
     return;
@@ -103,14 +131,50 @@ export function addMessage(
   container.appendChild(messageEl);
 
   if (persist) {
-    appendPersistedMessage({ text, type }).catch(() => {
-      // ignore storage failures
-    });
+    appendPersistedMessage({ text, type }).catch(() => {});
   }
 
-  // Scroll to bottom
   container.scrollTop = container.scrollHeight;
 }
+
+function addActionMessage(
+  shadowRoot: ShadowRoot | null,
+  text: string,
+  success: boolean,
+): void {
+  const container = shadowRoot?.getElementById("messages-container");
+  if (!container) return;
+
+  const messageEl = document.createElement("div");
+  messageEl.className = "message action-status";
+  messageEl.setAttribute(
+    "style",
+    `font-size: 12px; color: ${success ? "rgba(161,161,170,0.8)" : "rgba(239,68,68,0.8)"}; padding: 2px 0; align-self: flex-start;`,
+  );
+  messageEl.textContent = `${success ? ">" : "!"} ${text}`;
+  container.appendChild(messageEl);
+  container.scrollTop = container.scrollHeight;
+}
+
+function addImageMessage(shadowRoot: ShadowRoot | null, dataUrl: string): void {
+  const container = shadowRoot?.getElementById("messages-container");
+  if (!container) return;
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "message assistant";
+
+  const img = document.createElement("img");
+  img.src = dataUrl;
+  img.style.cssText =
+    "max-width:100%;border-radius:6px;margin-top:4px;display:block;";
+  img.alt = "Page screenshot";
+
+  wrapper.appendChild(img);
+  container.appendChild(wrapper);
+  container.scrollTop = container.scrollHeight;
+}
+
+// -------------------- TOOL CARDS --------------------
 
 function renderToolEventMessage(container: HTMLElement, text: string): boolean {
   const parsed = parseToolLine(text);
@@ -330,9 +394,289 @@ function prettyPayload(raw: string): string {
   }
 }
 
-/**
- * Show or hide loading indicator
- */
+// -------------------- ACTION RUNNER --------------------
+
+async function runActions(
+  shadowRoot: ShadowRoot | null,
+  actions: ActionType[],
+): Promise<void> {
+  for (const action of actions) {
+    const label = describeAction(action);
+    await new Promise((r) => setTimeout(r, 150));
+    try {
+      const result = await executeAction(action);
+      const ok = "success" in result ? (result.success as boolean) : true;
+      const detail = !ok && "error" in result ? ` — ${result.error}` : "";
+      addActionMessage(shadowRoot, `${label}${detail}`, ok);
+    } catch (err) {
+      addActionMessage(
+        shadowRoot,
+        `${label} — ${err instanceof Error ? err.message : "failed"}`,
+        false,
+      );
+    }
+  }
+}
+
+// -------------------- COMMAND PARSER --------------------
+
+const HELP_TEXT = `Available commands:
+/click <name>                    — click button or link by text
+/fill <field> <value>            — fill an input by name/label
+/type <text>                     — type text into the focused element
+/enter [field]                   — press Enter (on active or named field)
+/scroll up [px]                  — scroll up (default 500px)
+/scroll down [px]                — scroll down (default 500px)
+/scroll top                      — scroll to top
+/scroll bottom                   — scroll to bottom
+/goto <url>                      — navigate to URL
+/coord <x> <y>                   — click at screen coordinates
+/select <field> <option>         — choose a dropdown option by text
+/upload <field> <file>           — search for file by name and attach to a file input
+/upload <field> keyword:<term>   — search page for <term> and click matching file
+/content                         — extract readable text content from the page
+/result                          — click first search result
+/status                          — show page info
+/screenshot                      — take a screenshot of the current page
+/help                            — show this list
+
+Chain commands by separating with ", ":
+  /fill search computers, /enter search`;
+
+function formatStatus(s: PageStatus): string {
+  const lines: string[] = [
+    `Page: ${s.title}`,
+    `URL: ${s.url}`,
+    `Scroll: ${s.scroll.percent}% (${s.scroll.position}px / ${s.scroll.maxScroll}px)`,
+  ];
+  if (s.headings.length)
+    lines.push(
+      `Headings: ${s.headings
+        .slice(0, 5)
+        .map((h) => `[${h.level}] ${h.text}`)
+        .join(", ")}`,
+    );
+  if (s.buttons.length)
+    lines.push(
+      `Buttons: ${s.buttons
+        .slice(0, 6)
+        .map((b) => b.text || "(no label)")
+        .join(", ")}`,
+    );
+  if (s.textboxes.length)
+    lines.push(
+      `Inputs: ${s.textboxes
+        .slice(0, 6)
+        .map((i) => i.name)
+        .join(", ")}`,
+    );
+  if (s.links.length)
+    lines.push(
+      `Links: ${s.links
+        .slice(0, 5)
+        .map((l) => l.text || l.href)
+        .join(", ")}`,
+    );
+  return lines.join("\n");
+}
+
+async function handleCommand(
+  shadowRoot: ShadowRoot | null,
+  raw: string,
+  addMsg: (text: string, type: "user" | "assistant" | "error") => void,
+  ctx: { lastFilledField?: string } = {},
+): Promise<boolean> {
+  if (!raw.startsWith("/")) return false;
+
+  const [cmd, ...argParts] = raw.slice(1).trim().split(/\s+/);
+  const args = argParts.join(" ");
+
+  const ok = (text: string) => addMsg(text, "assistant");
+  const fail = (text: string) => addMsg(text, "error");
+  const report = (result: ActionResult, label: string) => {
+    if (result.success) {
+      ok(label);
+    } else {
+      fail(`${label} — ${result.error ?? "failed"}`);
+    }
+  };
+
+  switch (cmd.toLowerCase()) {
+    case "help":
+      ok(HELP_TEXT);
+      return true;
+
+    case "status": {
+      const s = getPageStatus();
+      ok(formatStatus(s));
+      return true;
+    }
+
+    case "click": {
+      if (!args) {
+        fail("Usage: /click <name>");
+        return true;
+      }
+      report(clickByName(args), `Click "${args}"`);
+      return true;
+    }
+
+    case "fill": {
+      if (!argParts[0] || argParts.length < 2) {
+        fail("Usage: /fill <field> <value>");
+        return true;
+      }
+      const field = argParts[0];
+      const value = argParts.slice(1).join(" ");
+      ctx.lastFilledField = field;
+      report(fillInput(field, value), `Fill "${field}" with "${value}"`);
+      return true;
+    }
+
+    case "type": {
+      if (!args) {
+        fail("Usage: /type <text>");
+        return true;
+      }
+      report(typeText(args), `Type "${args}"`);
+      return true;
+    }
+
+    case "enter": {
+      const target = args || ctx.lastFilledField;
+      if (target) {
+        report(pressEnterOn(target), `Press Enter on "${target}"`);
+      } else {
+        report(pressEnter(), "Press Enter");
+      }
+      return true;
+    }
+
+    case "scroll": {
+      const dir = argParts[0]?.toLowerCase();
+      const px = argParts[1] ? parseInt(argParts[1], 10) : undefined;
+      if (dir === "up") {
+        report(scrollUp(px), `Scroll up${px ? ` ${px}px` : ""}`);
+      } else if (dir === "down") {
+        report(scrollDown(px), `Scroll down${px ? ` ${px}px` : ""}`);
+      } else if (dir === "top") {
+        report(scrollToTop(), "Scroll to top");
+      } else if (dir === "bottom") {
+        report(scrollToBottom(), "Scroll to bottom");
+      } else {
+        fail("Usage: /scroll up|down|top|bottom [px]");
+      }
+      return true;
+    }
+
+    case "goto": {
+      if (!args) {
+        fail("Usage: /goto <url>");
+        return true;
+      }
+      const url = args.startsWith("http") ? args : `https://${args}`;
+      ok(`Navigating to ${url}`);
+      setTimeout(() => {
+        window.location.href = url;
+      }, 300);
+      return true;
+    }
+
+    case "coord": {
+      const x = parseFloat(argParts[0]);
+      const y = parseFloat(argParts[1]);
+      if (isNaN(x) || isNaN(y)) {
+        fail("Usage: /coord <x> <y>");
+        return true;
+      }
+      report(clickAtCoordinate(x, y), `Click at (${x}, ${y})`);
+      return true;
+    }
+
+    case "result": {
+      report(clickFirstSearchResult(), "Click first search result");
+      return true;
+    }
+
+    case "select": {
+      if (!argParts[0] || argParts.length < 2) {
+        fail("Usage: /select <field> <option>");
+        return true;
+      }
+      const field = argParts[0];
+      const option = argParts.slice(1).join(" ");
+      report(selectOption(field, option), `Select "${option}" in "${field}"`);
+      return true;
+    }
+
+    case "upload": {
+      if (!argParts[0]) {
+        fail(
+          "Usage: /upload <field> <file>  or  /upload <field> keyword:<term>",
+        );
+        return true;
+      }
+      const field = argParts[0];
+      const rest = argParts.slice(1).join(" ");
+      if (!rest) {
+        // No filename given — open the native file picker directly
+        report(clickFileInput(field), `Open file picker for "${field}"`);
+        return true;
+      }
+      const kwMatch = rest.match(/^keyword:(.+)$/i);
+      const keyword = kwMatch ? kwMatch[1].trim() : rest;
+      uploadFile(field, undefined, keyword).then((r) => {
+        if (!r.success) {
+          // File not found — open the native file picker so user can select manually
+          addMsg(
+            `Could not find "${keyword}" automatically. Opening file picker so you can select it manually.`,
+            "assistant",
+          );
+          report(clickFileInput(field), `Open file picker for "${field}"`);
+        } else {
+          report(r, `Search for "${keyword}" and attach to "${field}"`);
+        }
+      });
+      return true;
+    }
+
+    case "content": {
+      const content = getWebsiteContent();
+      if (content.paragraphs.length === 0) {
+        fail("No readable content found on this page.");
+      } else {
+        ok(
+          `[${content.title}]\n\n${content.paragraphs.slice(0, 30).join("\n\n")}`,
+        );
+      }
+      return true;
+    }
+
+    case "screenshot": {
+      addMsg("Taking screenshot...", "assistant");
+      const response = await new Promise<{
+        success: boolean;
+        data?: string;
+        error?: string;
+      }>((resolve) =>
+        chrome.runtime.sendMessage({ type: "TAKE_SCREENSHOT" }, resolve),
+      );
+      if (response?.success && response.data) {
+        addImageMessage(shadowRoot, response.data);
+      } else {
+        fail(`Screenshot failed — ${response?.error ?? "unknown error"}`);
+      }
+      return true;
+    }
+
+    default:
+      fail(`Unknown command: /${cmd}  —  type /help to see available commands`);
+      return true;
+  }
+}
+
+// -------------------- LOADING --------------------
+
 export function showLoading(
   shadowRoot: ShadowRoot | null,
   show: boolean,
@@ -340,7 +684,6 @@ export function showLoading(
   const container = shadowRoot?.getElementById("messages-container");
   if (!container) return;
 
-  // Remove existing loading indicator
   const existing = container.querySelector(".loading");
   if (existing) existing.remove();
 
@@ -360,14 +703,35 @@ export function showLoading(
   }
 }
 
-/**
- * Setup input field and send button
- */
+// -------------------- BACKGROUND RELAY --------------------
+
+export function sendToBackground(
+  message: ApiRequestMessage,
+): Promise<ApiResponse> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(message, (response: ApiResponse) => {
+      if (chrome.runtime.lastError) {
+        resolve({
+          success: false,
+          error: chrome.runtime.lastError.message || "Communication error",
+        });
+      } else {
+        resolve(
+          response || { success: false, error: "No response from background" },
+        );
+      }
+    });
+  });
+}
+
+// -------------------- INPUT SETUP --------------------
+
 export function setupInput(
   shadowRoot: ShadowRoot | null,
   handlers: {
     addMessage: (text: string, type: "user" | "assistant" | "error") => void;
     showLoading: (show: boolean) => void;
+    sendToBackground?: (message: ApiRequestMessage) => Promise<ApiResponse>;
   },
 ): void {
   const input = shadowRoot?.getElementById("message-input") as HTMLInputElement;
@@ -377,6 +741,7 @@ export function setupInput(
     const message = input?.value.trim();
     if (!message) return;
 
+    // CLEAR: wipe chat history
     if (message.toUpperCase() === "CLEAR") {
       input.value = "";
       handlers.showLoading(false);
@@ -385,11 +750,12 @@ export function setupInput(
       return;
     }
 
+    handlers.addMessage(message, "user");
+    input.value = "";
+
+    // /command <action> — direct action dispatch via background
     if (message.toLowerCase().startsWith("/command")) {
       const commandText = message.slice("/command".length).trim();
-      handlers.addMessage(message, "user");
-      input.value = "";
-
       if (!commandText) {
         handlers.addMessage(
           "Usage: /command <action>. Example: /command goto docs.google.com",
@@ -476,13 +842,22 @@ export function setupInput(
       return;
     }
 
-    handlers.addMessage(message, "user");
-    input.value = "";
+    // Slash commands — /click, /fill, /upload, etc. (local execution)
+    if (message.startsWith("/")) {
+      const parts = message.split(/,\s*(?=\/)/);
+      const ctx: { lastFilledField?: string } = {};
+      for (const part of parts) {
+        await handleCommand(shadowRoot, part.trim(), handlers.addMessage, ctx);
+        if (parts.length > 1) await new Promise((r) => setTimeout(r, 200));
+      }
+      return;
+    }
+
+    // Regular messages — send to backend
     handlers.showLoading(true);
 
     try {
       const BACKEND_API = "http://localhost:5000";
-      const url = `${BACKEND_API}/api/relay`;
       const isStreamingGoal =
         message.toUpperCase().startsWith("GOAL:") &&
         Boolean(message.split(":", 2)[1]?.trim());
@@ -498,18 +873,21 @@ export function setupInput(
           throw new Error(`HTTP ${once.status}`);
         }
 
-        const data = (await once.json()) as {
-          message?: string;
-          done?: boolean;
-        };
+        const data = (await once.json()) as ChatApiResponse;
         handlers.showLoading(false);
         if (typeof data.message === "string" && data.message) {
           handlers.addMessage(data.message, "assistant");
+        } else if (data.echo) {
+          handlers.addMessage(data.echo, "assistant");
+        }
+        if (Array.isArray(data.actions) && data.actions.length > 0) {
+          await runActions(shadowRoot, data.actions);
         }
         return;
       }
 
-      // Use fetch with streaming (handles CORS better than EventSource)
+      // Streaming for GOAL: messages
+      const url = `${BACKEND_API}/api/relay`;
       const response = await fetch(
         `${url}?message=${encodeURIComponent(message)}`,
       );
@@ -528,16 +906,11 @@ export function setupInput(
         throw new Error("No response body");
       }
 
-      // Read the stream
       while (!sawDone) {
         const { done, value } = await reader.read();
-
         if (done) break;
 
-        // Decode the chunk
         sseBuffer += decoder.decode(value, { stream: true });
-
-        // Parse complete SSE events separated by blank lines.
         const parsed = consumeSseEvents(sseBuffer);
         sseBuffer = parsed.remainder;
 
@@ -546,7 +919,6 @@ export function setupInput(
             handlers.showLoading(false);
             firstMessage = false;
           }
-
           if (typeof data.message === "string" && data.message) {
             handlers.addMessage(data.message, "assistant");
           }
@@ -578,11 +950,10 @@ export function setupInput(
         try {
           await reader.cancel();
         } catch {
-          // Ignore reader cancellation errors.
+          // ignore
         }
       }
 
-      // Make sure loading is hidden
       handlers.showLoading(false);
     } catch (error) {
       handlers.showLoading(false);
@@ -595,12 +966,9 @@ export function setupInput(
 
   sendBtn?.addEventListener("click", sendMessage);
   input?.addEventListener("keypress", (e: KeyboardEvent) => {
-    if (e.key === "Enter") {
-      sendMessage();
-    }
+    if (e.key === "Enter") sendMessage();
   });
 
-  // Prevent keyboard events from bubbling to the host page
   if (input) {
     const stopPropagation = (e: Event) => e.stopPropagation();
     input.addEventListener("keydown", stopPropagation);
@@ -632,16 +1000,15 @@ function consumeSseEvents(buffer: string): {
     try {
       events.push(JSON.parse(dataLines.join("\n")) as Record<string, unknown>);
     } catch {
-      // Ignore malformed event payloads.
+      // ignore malformed events
     }
   }
 
   return { events, remainder };
 }
 
-/**
- * Setup close button, settings button, and test button
- */
+// -------------------- BUTTONS --------------------
+
 export function setupButtons(
   shadowRoot: ShadowRoot | null,
   container: HTMLElement | null,
