@@ -335,7 +335,14 @@ async function findAndFetchFile(fileName: string): Promise<ApiResponse> {
     return null;
   }
 
-  const subDirs = ["Downloads", "Documents", "Desktop", "Pictures", "Videos", ""];
+  const subDirs = [
+    "Downloads",
+    "Documents",
+    "Desktop",
+    "Pictures",
+    "Videos",
+    "",
+  ];
   const homeDir = await getHomeDir();
 
   if (homeDir) {
@@ -374,7 +381,12 @@ async function findAndFetchFile(fileName: string): Promise<ApiResponse> {
   }
 
   const systemRoots = ["file:///C:/Users/", "file:///home/", "file:///Users/"];
-  const skipFolders = new Set(["Public", "All Users", "Default", "Default User"]);
+  const skipFolders = new Set([
+    "Public",
+    "All Users",
+    "Default",
+    "Default User",
+  ]);
 
   for (const root of systemRoots) {
     const userFolders = await listDir(root);
@@ -387,7 +399,10 @@ async function findAndFetchFile(fileName: string): Promise<ApiResponse> {
           : `${userBase}/${fileName}`;
         const dataUrl = await tryFetch(fileUrl);
         if (dataUrl) {
-          console.log("[InterfaceAI] Found via directory listing sweep:", fileUrl);
+          console.log(
+            "[InterfaceAI] Found via directory listing sweep:",
+            fileUrl,
+          );
           return { success: true, data: dataUrl };
         }
       }
