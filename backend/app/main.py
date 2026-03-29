@@ -193,6 +193,24 @@ def get_agent_memories():
     ), 200
 
 
+@app.delete("/api/agent-memories")
+def delete_agent_memory():
+    memory_id = request.args.get("memory_id", "").strip()
+    if not memory_id:
+        return jsonify({"error": "missing memory_id"}), 400
+
+    store = _memory_store()
+    deleted_count = store.delete_agent_memory(memory_id=memory_id)
+    memories = store.list_agent_memories(limit=200)
+    return jsonify(
+        {
+            "agent_id": session.get_agent_id(),
+            "deleted_count": deleted_count,
+            "memories": memories,
+        }
+    ), 200
+
+
 @app.get("/api/extension/health")
 def api_extension_health():
     running = is_server_running()

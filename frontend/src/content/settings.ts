@@ -12,6 +12,7 @@ import type {
   UpdateUserSettingsMessage,
   GetUserMemoriesMessage,
   AddUserMemoryMessage,
+  DeleteAgentMemoryMessage,
   DeleteUserMemoryMessage,
   ApiResponse,
 } from "./types";
@@ -590,6 +591,7 @@ export function renderAgentMemoriesPage(
   shadowRoot: ShadowRoot | null,
   memories: UserMemory[],
   agentId: string,
+  isAdmin = false,
 ): void {
   const agentsContent = shadowRoot?.getElementById("agents-content");
   if (!agentsContent) return;
@@ -604,18 +606,76 @@ export function renderAgentMemoriesPage(
 
     <div class="settings-section">
       <div class="section-header-row">
+        <h3>Agent Admin</h3>
+      </div>
+      <div class="settings-field" style="gap: 10px; align-items: center;">
+        <input
+          id="agent-admin-password"
+          type="password"
+          placeholder="${isAdmin ? "Admin access enabled" : "Enter admin password"}"
+          style="flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: var(--text-primary); padding: 10px 12px;"
+          ${isAdmin ? 'disabled="disabled"' : ""}
+        />
+        <button class="reload-memories-btn" id="agent-admin-unlock-btn">${isAdmin ? "Lock" : "Unlock"}</button>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="section-header-row">
         <h3>Shared Agent Memories</h3>
         <button class="reload-memories-btn" id="reload-agent-memories-btn">Reload</button>
       </div>
       <div class="memories-container" id="agent-memories-container">
         ${renderMemoryList(memories, {
           emptyText: "No agent memories saved yet.",
-          deletable: false,
+          deletable: isAdmin,
           includeMeta: true,
         })}
       </div>
     </div>
   `;
+}
+
+export function setupAgentMemoriesListeners(
+  shadowRoot: ShadowRoot | null,
+  currentMemories: UserMemory[],
+  isAdmin: boolean,
+  onToggleAdmin: (password: string) => Promise<void>,
+  onReload: () => Promise<void>,
+  onDelete: (memory: UserMemory) => Promise<void>,
+): void {
+  const unlockBtn = shadowRoot?.getElementById("agent-admin-unlock-btn");
+  unlockBtn?.addEventListener("click", async () => {
+    if (isAdmin) {
+      await onToggleAdmin("");
+      return;
+    }
+    const input = shadowRoot?.getElementById(
+      "agent-admin-password",
+    ) as HTMLInputElement | null;
+    await onToggleAdmin(input?.value || "");
+  });
+
+  const reloadBtn = shadowRoot?.getElementById("reload-agent-memories-btn");
+  reloadBtn?.addEventListener("click", async () => {
+    await onReload();
+  });
+
+  if (!isAdmin) return;
+
+  const memoryItems = shadowRoot?.querySelectorAll(
+    "#agent-memories-container .memory-item",
+  );
+  memoryItems?.forEach((item) => {
+    item.addEventListener("click", async () => {
+      const memoryId = item.getAttribute("data-memory-id") || "";
+      const memory = currentMemories.find((entry) => entry.id === memoryId);
+      if (!memory) return;
+      const confirmed = confirm(`Delete agent memory "${memory.fact}"?`);
+      if (!confirmed) return;
+      await onDelete(memory);
+    });
+  });
 }
 
 /**
@@ -998,5 +1058,50 @@ export async function fetchAgentMemories(): Promise<{
         }
       },
     );
+  });
+}
+
+export async function deleteAgentMemory(
+  memory: UserMemory,
+): Promise<{
+  agentId: string;
+  memories: UserMemory[];
+} | null> {
+  return new Promise((resolve) => {
+    const message: DeleteAgentMemoryMessage = {
+      type: "DELETE_AGENT_MEMORY",
+      payload: {
+        memory_id: memory.id,
+      },
+    };
+
+    chrome.runtime.sendMessage(message, (response: ApiResponse) => {
+      if (chrome.runtime.lastError) {
+        console.error(
+          "[Settings] Error deleting agent memory:",
+          chrome.runtime.lastError,
+        );
+        resolve(null);
+      } else if (
+        response.success &&
+        response.data &&
+        typeof response.data === "object"
+      ) {
+        const data = response.data as {
+          agentId?: string;
+          memories?: UserMemory[];
+        };
+        resolve({
+          agentId: data.agentId || "",
+          memories: Array.isArray(data.memories) ? data.memories : [],
+        });
+      } else {
+        console.error(
+          "[Settings] Failed to delete agent memory:",
+          response.error,
+        );
+        resolve(null);
+      }
+    });
   });
 }

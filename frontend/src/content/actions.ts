@@ -10,6 +10,121 @@ export interface ActionResult {
   [key: string]: unknown;
 }
 
+function nativeInputValueSet(
+  el: HTMLInputElement | HTMLTextAreaElement,
+  value: string,
+): void {
+  const proto =
+    el instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype;
+  const descriptor = Object.getOwnPropertyDescriptor(proto, "value");
+  if (descriptor?.set) {
+    descriptor.set.call(el, value);
+  } else {
+    el.value = value;
+  }
+  const tracker = (el as HTMLInputElement & { _valueTracker?: { setValue(v: string): void } })
+    ._valueTracker;
+  tracker?.setValue(String(value ?? ""));
+}
+
+function resolveTextLikeElement(
+  identifier: string,
+):
+  | HTMLInputElement
+  | HTMLTextAreaElement
+  | HTMLElement
+  | null {
+  const lower = identifier.toLowerCase();
+  const selectors = [
+    `input[name="${identifier}" i], textarea[name="${identifier}" i]`,
+    `#${CSS.escape(identifier)}`,
+    `input[placeholder*="${identifier}" i], textarea[placeholder*="${identifier}" i]`,
+    `input[aria-label*="${identifier}" i], textarea[aria-label*="${identifier}" i]`,
+    `[contenteditable="true"][aria-label*="${identifier}" i]`,
+    `[role="textbox"][aria-label*="${identifier}" i]`,
+    `[contenteditable="true"][id="${identifier}" i]`,
+    `[role="textbox"][id="${identifier}" i]`,
+  ];
+
+  for (const selector of selectors) {
+    const element = document.querySelector(selector);
+    if (element) return element as HTMLInputElement | HTMLTextAreaElement | HTMLElement;
+  }
+
+  for (const label of document.querySelectorAll("label")) {
+    if (label.textContent?.toLowerCase().includes(lower)) {
+      const forAttr = label.getAttribute("for");
+      const labeled = forAttr
+        ? document.getElementById(forAttr)
+        : label.querySelector(
+            'input, textarea, [contenteditable="true"], [role="textbox"]',
+          );
+      if (labeled) {
+        return labeled as HTMLInputElement | HTMLTextAreaElement | HTMLElement;
+      }
+    }
+  }
+
+  const typeMap: Record<string, string> = {
+    search: 'input[type="search"], input[name*="search" i], [role="searchbox"]',
+    email: 'input[type="email"]',
+    password: 'input[type="password"]',
+    editor: 'textarea, [contenteditable="true"], [role="textbox"]',
+    text: 'textarea, input[type="text"], [contenteditable="true"], [role="textbox"]',
+  };
+
+  if (typeMap[lower]) {
+    return (
+      document.querySelector(typeMap[lower]) as
+        | HTMLInputElement
+        | HTMLTextAreaElement
+        | HTMLElement
+        | null
+    );
+  }
+
+  return null;
+}
+
+function setTextLikeElementValue(
+  el: HTMLInputElement | HTMLTextAreaElement | HTMLElement,
+  value: string,
+): ActionResult {
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+    if ((el as HTMLInputElement).type?.toLowerCase() === "file") {
+      return {
+        success: false,
+        error:
+          "Target input is a file input. Use uploadFile(identifier, filePath|keyword) or clickFileInput(identifier).",
+      };
+    }
+    el.focus();
+    nativeInputValueSet(el, value);
+    el.dispatchEvent(new InputEvent("beforeinput", { bubbles: true, data: value, inputType: "insertText" }));
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    return {
+      success: true,
+      name: el.getAttribute("name") || el.id || el.getAttribute("placeholder") || "text-field",
+      tag: el.tagName,
+    };
+  }
+
+  el.focus();
+  el.click();
+  el.textContent = value;
+  el.dispatchEvent(new InputEvent("beforeinput", { bubbles: true, data: value, inputType: "insertText" }));
+  el.dispatchEvent(new InputEvent("input", { bubbles: true, data: value, inputType: "insertText" }));
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+  return {
+    success: true,
+    name: el.getAttribute("aria-label") || el.id || el.getAttribute("role") || "editor",
+    tag: el.tagName,
+  };
+}
+
 // -------------------- ACTION FUNCTIONS --------------------
 
 export function clickAtCoordinate(x: number, y: number): ActionResult {
@@ -77,58 +192,9 @@ export function scrollToBottom(): ActionResult {
 }
 
 export function fillInput(identifier: string, value: string): ActionResult {
-  const lower = identifier.toLowerCase();
-
-  let input: HTMLInputElement | HTMLTextAreaElement | null =
-    document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-      `input[name="${identifier}" i], textarea[name="${identifier}" i]`,
-    ) ||
-    document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-      `#${CSS.escape(identifier)}`,
-    ) ||
-    document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-      `input[placeholder*="${identifier}" i], textarea[placeholder*="${identifier}" i]`,
-    ) ||
-    document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-      `input[aria-label*="${identifier}" i], textarea[aria-label*="${identifier}" i]`,
-    );
-
-  if (!input) {
-    for (const label of document.querySelectorAll("label")) {
-      if (label.textContent?.toLowerCase().includes(lower)) {
-        const forAttr = label.getAttribute("for");
-        input = forAttr
-          ? (document.getElementById(forAttr) as HTMLInputElement | null)
-          : label.querySelector("input, textarea");
-        if (input) break;
-      }
-    }
-  }
-
-  if (!input) {
-    const typeMap: Record<string, string> = {
-      search: 'input[type="search"], input[name*="search" i]',
-      email: 'input[type="email"]',
-      password: 'input[type="password"]',
-    };
-    if (typeMap[lower]) {
-      input = document.querySelector(typeMap[lower]);
-    }
-  }
-
+  const input = resolveTextLikeElement(identifier);
   if (input) {
-    if ((input as HTMLInputElement).type?.toLowerCase() === "file") {
-      return {
-        success: false,
-        error:
-          "Target input is a file input. Use uploadFile(identifier, filePath|keyword) or clickFileInput(identifier).",
-      };
-    }
-    input.focus();
-    input.value = value;
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-    return { success: true, name: input.name || input.id || input.placeholder };
+    return setTextLikeElementValue(input, value);
   }
   return { success: false, error: `No input found matching: "${identifier}"` };
 }
@@ -252,15 +318,21 @@ export function pressEnterOn(identifier: string): ActionResult {
 }
 
 export function typeText(text: string): ActionResult {
-  const active = document.activeElement as HTMLInputElement | null;
-  if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) {
+  const active = document.activeElement as HTMLElement | null;
+  if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
     const start = active.selectionStart ?? active.value.length;
     const end = active.selectionEnd ?? active.value.length;
-    active.value =
+    const nextValue =
       active.value.substring(0, start) + text + active.value.substring(end);
-    active.dispatchEvent(new Event("input", { bubbles: true }));
-    active.dispatchEvent(new Event("change", { bubbles: true }));
-    return { success: true };
+    return setTextLikeElementValue(active, nextValue);
+  }
+  if (
+    active &&
+    (active.getAttribute("contenteditable") === "true" ||
+      active.getAttribute("role") === "textbox")
+  ) {
+    const nextValue = `${active.textContent || ""}${text}`;
+    return setTextLikeElementValue(active, nextValue);
   }
   return { success: false, error: "No active input element to type into" };
 }
@@ -812,6 +884,13 @@ export interface PageStatus {
     readOnly?: boolean;
     required?: boolean;
   }[];
+  editors: {
+    id: string | null;
+    role: string | null;
+    ariaLabel?: string | null;
+    text: string;
+    contentEditable: boolean;
+  }[];
   sliders: {
     id: string | null;
     name: string;
@@ -956,6 +1035,20 @@ export function getPageStatus(): PageStatus {
       readOnly: !!t.readOnly,
       required: !!t.required,
     }));
+  const editors = Array.from(
+    document.querySelectorAll<HTMLElement>(
+      '[contenteditable="true"], [role="textbox"]',
+    ),
+  )
+    .filter((el) => isVisible(el))
+    .slice(0, 20)
+    .map((el) => ({
+      id: el.id || null,
+      role: el.getAttribute("role"),
+      ariaLabel: el.getAttribute("aria-label"),
+      text: trim(el.textContent, 120),
+      contentEditable: el.getAttribute("contenteditable") === "true",
+    }));
   const sliders = Array.from(
     document.querySelectorAll<HTMLInputElement>('input[type="range"]'),
   )
@@ -1080,6 +1173,7 @@ export function getPageStatus(): PageStatus {
     checkboxes,
     radios,
     textareas,
+    editors,
     sliders,
     forms,
     landmarks,

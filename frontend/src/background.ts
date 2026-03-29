@@ -52,6 +52,13 @@ interface GetAgentMemoriesMessage {
   type: "GET_AGENT_MEMORIES";
 }
 
+interface DeleteAgentMemoryMessage {
+  type: "DELETE_AGENT_MEMORY";
+  payload: {
+    memory_id: string;
+  };
+}
+
 interface ExecuteActionMessage {
   type: "EXECUTE_ACTION";
   payload: Record<string, unknown>;
@@ -435,6 +442,38 @@ async function getAgentMemories(): Promise<ApiResponse> {
       success: false,
       error:
         error instanceof Error ? error.message : "Failed to load agent memories",
+    };
+  }
+}
+
+async function deleteAgentMemory(payload: {
+  memory_id: string;
+}): Promise<ApiResponse> {
+  const params = new URLSearchParams({ memory_id: payload.memory_id });
+  try {
+    const resp = await fetch(
+      `${BACKEND_API}/api/agent-memories?${params.toString()}`,
+      { method: "DELETE" },
+    );
+    if (!resp.ok) {
+      return { success: false, error: `HTTP ${resp.status}` };
+    }
+    const payloadData = (await resp.json()) as {
+      memories?: UserMemory[];
+      agent_id?: string;
+    };
+    return {
+      success: true,
+      data: {
+        memories: payloadData.memories || [],
+        agentId: payloadData.agent_id || "",
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to delete agent memory",
     };
   }
 }
@@ -841,6 +880,21 @@ chrome.runtime.onMessage.addListener(
               error instanceof Error
                 ? error.message
                 : "Failed to get agent memories",
+          });
+        });
+      return true;
+    }
+
+    if (message.type === "DELETE_AGENT_MEMORY") {
+      deleteAgentMemory((message as DeleteAgentMemoryMessage).payload)
+        .then(sendResponse)
+        .catch((error) => {
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Failed to delete agent memory",
           });
         });
       return true;

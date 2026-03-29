@@ -494,6 +494,17 @@ class Mem0MemoryStore:
                 break
         return deduped
 
+    def delete_agent_memory(
+        self,
+        *,
+        memory_id: str,
+    ) -> int:
+        normalized_memory_id = (memory_id or "").strip()
+        if not normalized_memory_id:
+            return 0
+        self.agent_client.delete(memory_id=normalized_memory_id)
+        return 1
+
 
 class PostgresMemoryStore:
     def __init__(self, agent_id: str = "") -> None:
@@ -944,6 +955,29 @@ class PostgresMemoryStore:
                 break
         return deduped
 
+    def delete_agent_memory(
+        self,
+        *,
+        memory_id: str,
+    ) -> int:
+        normalized_memory_id = (memory_id or "").strip()
+        if not self.agent_id or not normalized_memory_id or not normalized_memory_id.isdigit():
+            return 0
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM memories
+                    WHERE id = %s
+                      AND kind = 'agent_playbook'
+                      AND thread_id = %s
+                    """,
+                    (int(normalized_memory_id), self.agent_id),
+                )
+                deleted = cur.rowcount or 0
+            conn.commit()
+        return deleted
+
     def list_user_memories(
         self,
         *,
@@ -1272,3 +1306,10 @@ class BrowserMemoryStore:
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         return self.impl.list_agent_memories(limit=limit)
+
+    def delete_agent_memory(
+        self,
+        *,
+        memory_id: str,
+    ) -> int:
+        return self.impl.delete_agent_memory(memory_id=memory_id)

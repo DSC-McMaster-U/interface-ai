@@ -90,6 +90,13 @@ export interface GetAgentMemoriesMessage {
   type: "GET_AGENT_MEMORIES";
 }
 
+export interface DeleteAgentMemoryMessage {
+  type: "DELETE_AGENT_MEMORY";
+  payload: {
+    memory_id: string;
+  };
+}
+
 export interface GoogleSignInMessage {
   type: "GOOGLE_SIGN_IN";
 }

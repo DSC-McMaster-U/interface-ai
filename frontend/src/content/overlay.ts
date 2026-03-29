@@ -16,9 +16,11 @@ import {
 } from "./ui-handlers";
 import {
   SETTINGS_STYLES,
+  deleteAgentMemory,
   renderSettings,
   renderAgentMemoriesPage,
   renderSignIn,
+  setupAgentMemoriesListeners,
   setupSettingsListeners,
   fetchUserSettings,
   fetchUserMemories,
@@ -50,6 +52,7 @@ export class InterfaceAIOverlay {
   private userMemories: UserMemory[] = [];
   private agentMemories: UserMemory[] = [];
   private agentId = "";
+  private hasAgentAdminAccess = false;
 
   constructor() {
     this.init();
@@ -365,16 +368,54 @@ export class InterfaceAIOverlay {
     const cached = await getCachedAgentMemories();
     this.agentMemories = cached?.memories || [];
     this.agentId = cached?.agentId || "";
-    renderAgentMemoriesPage(this.shadowRoot, this.agentMemories, this.agentId);
-
-    const reloadBtn = this.shadowRoot?.getElementById("reload-agent-memories-btn");
-    reloadBtn?.addEventListener("click", async () => {
-      await this.reloadAgentMemories();
-    });
+    renderAgentMemoriesPage(
+      this.shadowRoot,
+      this.agentMemories,
+      this.agentId,
+      this.hasAgentAdminAccess,
+    );
+    setupAgentMemoriesListeners(
+      this.shadowRoot,
+      this.agentMemories,
+      this.hasAgentAdminAccess,
+      async (password) => {
+        await this.handleAgentAdminToggle(password);
+      },
+      async () => {
+        await this.reloadAgentMemories();
+      },
+      async (memory) => {
+        await this.handleDeleteAgentMemory(memory);
+      },
+    );
   }
 
   private async reloadAgentMemories(): Promise<void> {
     const payload = await fetchAgentMemories();
+    if (!payload) return;
+    this.agentMemories = payload.memories;
+    this.agentId = payload.agentId;
+    await setCachedAgentMemories(payload);
+    await this.loadAndRenderAgentMemories();
+  }
+
+  private async handleAgentAdminToggle(password: string): Promise<void> {
+    if (this.hasAgentAdminAccess) {
+      this.hasAgentAdminAccess = false;
+      await this.loadAndRenderAgentMemories();
+      return;
+    }
+    if ((password || "").trim() !== "gdsc") {
+      alert("Incorrect admin password.");
+      return;
+    }
+    this.hasAgentAdminAccess = true;
+    await this.loadAndRenderAgentMemories();
+  }
+
+  private async handleDeleteAgentMemory(memory: UserMemory): Promise<void> {
+    if (!this.hasAgentAdminAccess) return;
+    const payload = await deleteAgentMemory(memory);
     if (!payload) return;
     this.agentMemories = payload.memories;
     this.agentId = payload.agentId;

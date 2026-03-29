@@ -547,9 +547,9 @@ def run_architecture_1(
             content=(
                 "You are a browser automation agent. Use tools to complete the goal. "
                 "Call one tool at a time. If a tool fails, you must try a different approach. "
-                "Use getPageStatus often; it tells you what inputs, textareas, buttons, checkboxes, radios, dropdowns, file inputs, links, forms, and other visible elements are on the page. "
+                "Use getPageStatus often; it tells you what inputs, textareas, editor surfaces, buttons, checkboxes, radios, dropdowns, file inputs, links, forms, and other visible elements are on the page. "
                 "Use getPageStatus as your inventory of what you can interact with before choosing tools. "
-                "Use fillInput for text-like fields, setCheckbox for checkboxes, selectRadio for radio groups, selectOption for dropdowns, and uploadFile/clickFileInput for file inputs. "
+                "Use fillInput for text-like fields, including textareas and editor surfaces such as contenteditable or role=textbox elements, setCheckbox for checkboxes, selectRadio for radio groups, selectOption for dropdowns, and uploadFile/clickFileInput for file inputs. "
                 "Use getWebsiteContent when the task depends on reading the actual content of an article, documentation page, Wikipedia page, or long webpage prose instead of just interactive elements. "
                 "If the user asks what a page says, asks for a summary, asks for key points, asks for facts from an article, or asks you to report information from a webpage, you should navigate to the page, call getWebsiteContent, and then answer using the extracted text. "
                 "For reading/reporting tasks, do not rely on getPageStatus alone because it mostly describes the page structure rather than the article text. "
