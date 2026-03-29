@@ -28,6 +28,9 @@ services:
       - backend
     environment:
       - BACKEND_URL=http://backend:5000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    ports:
+      - "6000:6000"
     profiles:
       - vision
 
