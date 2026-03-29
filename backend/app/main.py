@@ -58,6 +58,9 @@ def relay():
         session.start(goal, restart_if_running=True)
 
         def stream_agent():
+            # Emit an immediate acknowledgement so the UI can stop showing
+            # "Thinking..." even if the first tool/event takes time.
+            yield {"message": f'Goal received: "{goal}". Starting agent...'}
             for item in session.stream():
                 if "message" in item:
                     yield {"message": item["message"]}
@@ -193,9 +196,19 @@ def _handle_non_goal_command(msg: str) -> list[dict[str, object]]:
 
 
 def _sse(items):
+    def _compact_item(item: dict[str, object]) -> dict[str, object]:
+        message = item.get("message")
+        if isinstance(message, str) and len(message) > 4000:
+            return {
+                **item,
+                "message": message[:4000] + "...(truncated)",
+            }
+        return item
+
     def event_stream():
         for item in items:
-            yield f"data: {json.dumps(item)}\\n\\n"
+            compact = _compact_item(item)
+            yield f"data: {json.dumps(compact)}\\n\\n"
 
     return Response(
         stream_with_context(event_stream()),

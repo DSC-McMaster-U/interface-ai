@@ -9,12 +9,22 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgresql://user:password@postgres:5432/interfaceai
+      - MEMORY_BACKEND=${MEMORY_BACKEND:-mem0}
+      - MEMORY_DATABASE_URL=${MEMORY_DATABASE_URL:-}
+      - MEMORY_AUTO_MIGRATE=${MEMORY_AUTO_MIGRATE:-1}
+      - MEMORY_USE_PGVECTOR=${MEMORY_USE_PGVECTOR:-0}
+      - MEMORY_VECTOR_DIM=${MEMORY_VECTOR_DIM:-768}
+      - MEMORY_EMBEDDING_MODEL=${MEMORY_EMBEDDING_MODEL:-models/gemini-embedding-001}
+      - MEMORY_AGENT_USER_ID=${MEMORY_AGENT_USER_ID:-__agent__}
+      - MEM0_USER_COLLECTION=${MEM0_USER_COLLECTION:-interfaceai_mem0_user}
+      - MEM0_AGENT_COLLECTION=${MEM0_AGENT_COLLECTION:-interfaceai_mem0_agent}
+      - MEM0_LLM_MODEL=${MEM0_LLM_MODEL:-gemini-2.5-flash}
       - PYTHONUNBUFFERED=1
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - MEM0_API_KEY=${MEM0_API_KEY}
-      - MEM0_ORG_ID=${MEM0_ORG_ID}
-      - MEM0_PROJECT_ID=${MEM0_PROJECT_ID}
-      - MEM0_APP_ID=${MEM0_APP_ID}
+      - MEM0_ORG_ID=${MEM0_ORG_ID:-}
+      - MEM0_PROJECT_ID=${MEM0_PROJECT_ID:-}
+      - MEM0_APP_ID=${MEM0_APP_ID:-}
       - MEM0_AGENT_ID=${MEM0_AGENT_ID}
     depends_on:
       - redis

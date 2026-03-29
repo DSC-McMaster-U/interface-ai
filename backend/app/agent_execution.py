@@ -38,7 +38,7 @@ class AgentSession:
         self._thread: threading.Thread | None = None
         self._goal: str = ""
         self._last_stopped_goal: str = ""
-        self._require_approval: bool = True
+        self._require_approval: bool = False
         self._queued_goal: str | None = None
         self._restart_watcher_active: bool = False
         self._user_id: str = "local-user"
@@ -371,13 +371,39 @@ class AgentSession:
                 f"Tool '{action}' failed with error '{err}'. "
                 "Choose a different action or different parameters."
             )
+        emit_payload: dict[str, Any] | Any = result
+        if action == "getPageStatus" and isinstance(result, dict):
+            # Keep streamed tool logs compact; full page snapshots can be very large
+            # and may freeze the UI while rendering chat events.
+            emit_payload = {
+                "success": bool(result.get("success", False)),
+                "error": str(result.get("error") or ""),
+                "title": str(result.get("title") or ""),
+                "url": str(result.get("url") or ""),
+                "scroll": result.get("scroll") or {},
+                "headings_count": len(result.get("headings") or []),
+                "buttons_count": len(result.get("buttons") or []),
+                "inputs_count": len(result.get("inputs") or []),
+                "links_count": len(result.get("links") or []),
+                "images_count": len(result.get("images") or []),
+                "paragraphs_count": len(result.get("paragraphs") or []),
+            }
         try:
-            compact = json.dumps(result, ensure_ascii=True)
+            compact = json.dumps(emit_payload, ensure_ascii=True)
         except Exception:
-            compact = str(result)
+            compact = str(emit_payload)
+        if len(compact) > 6000:
+            compact = compact[:6000] + "...(truncated)"
         self._emit(f"[tool:result] {action} {compact}")
-        if result.get("error") == "WebSocket server not running":
-            self._emit("Browser extension WS server not running. Agent stopped.")
+        error_text = str(result.get("error") or "")
+        if (
+            error_text == "WebSocket server not running"
+            or "No browser connected" in error_text
+            or "command timeout" in error_text.lower()
+        ):
+            self._emit(
+                "Browser extension is not responding. Reload the extension tab and retry. Agent stopped."
+            )
             self.stop()
         return result
 
