@@ -1,4 +1,5 @@
 import json
+import logging
 import threading
 from typing import Any, Callable
 
@@ -13,11 +14,14 @@ from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
 
+from app.db import get_profile
 from app.langgraph.utilities import (
     content_to_text,
     invoke_with_retry,
     parse_verdict_json,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def run_architecture_1(
@@ -30,6 +34,7 @@ def run_architecture_1(
     request_user_input: Callable[..., dict[str, Any]],
     get_runtime_feedback: Callable[[], list[str]],
     stop_event: threading.Event,
+    user_id: str | None = None,
 ) -> None:
     @tool
     def goto(url: str) -> dict[str, Any]:
@@ -149,6 +154,23 @@ def run_architecture_1(
     )
     agent = create_react_agent(model=model, tools=tools)
 
+    # -------------------------------------------------------------------
+    # Inject user profile into system prompt if available
+    # -------------------------------------------------------------------
+    user_profile_context = ""
+    if user_id:
+        try:
+            profile = get_profile(user_id)
+            prefs = profile.get("preferences", {})
+            if prefs:
+                user_profile_context = (
+                    "\n\nYou have access to the following user profile information. "
+                    "Use it to personalise your actions (e.g. auto-fill forms, greet the user by name). "
+                    f"User profile: {json.dumps(prefs, ensure_ascii=False)}"
+                )
+        except Exception as exc:
+            logger.warning("Could not load user profile for %s: %s", user_id, exc)
+
     initial_status = approved_send("getPageStatus", {})
     context = json.dumps(initial_status)[:6000]
 
@@ -165,6 +187,7 @@ def run_architecture_1(
                 "Do not ask for low-stakes ambiguities when a reasonable default is acceptable. "
                 "Example: for 'play minecraft vid', do not ask what site to use; just choose a reasonable place like YouTube and proceed. "
                 "Example: for a job application, if the form requires personal details like legal name, phone number, or a specific internship choice that is not clearly determined, ask a single precise question with requestUserInput. "
+                + user_profile_context
             )
         ),
         HumanMessage(content=f"Goal: {goal}"),
