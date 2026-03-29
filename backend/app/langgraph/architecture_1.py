@@ -218,7 +218,9 @@ def run_architecture_1(
                                 content=(
                                     "Extract long-term user memory from a user answer. "
                                     "Only keep stable profile facts or durable preferences that should help future tasks. "
-                                    "Do not store temporary workflow acknowledgements, one-off form answers, file-upload confirmations, or ephemeral task details. "
+                                    "Do not store temporary workflow acknowledgements, one-off form answers, file-upload confirmations, ephemeral task details, "
+                                    "or correction-status statements like 'the phone number is incorrect' or 'the country is wrong'. "
+                                    "Only store the actual durable value or preference itself, such as the real phone number, country, name, email, preference, or other stable fact. "
                                     "Return strict JSON only as an array of objects: "
                                     '[{"field_key":"snake_case_key","fact":"short natural-language memory sentence"}]. '
                                     "Return [] if nothing should be stored."

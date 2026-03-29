@@ -6,7 +6,8 @@ from flask import Flask, Response, jsonify, request, stream_with_context
 from flask_cors import CORS
 
 from app.agent_execution import session
-from app.db import get_profile, init_tables, upsert_profile
+from app.continuous_learning import BrowserMemoryStore
+from app.db import get_profile, init_tables, normalize_user_id, upsert_profile
 from app.extension_automation import (
     is_server_running,
     send_command_sync,
@@ -64,7 +65,7 @@ def auth_google():
 
     info = resp.json()
     email = info.get("email", "")
-    user_id = info.get("sub", email)
+    user_id = normalize_user_id(info.get("sub", email))
 
     if not user_id:
         return jsonify({"error": "could not determine user id"}), 400
@@ -118,6 +119,80 @@ def update_user_profile():
     return jsonify(profile), 200
 
 
+def _memory_store() -> BrowserMemoryStore:
+    return BrowserMemoryStore(agent_id=session.get_agent_id())
+
+
+@app.get("/api/user-memories")
+def get_user_memories():
+    user_id = request.args.get("user_id", "").strip()
+    if not user_id:
+        return jsonify({"error": "missing user_id"}), 400
+
+    memories = _memory_store().list_user_memories(user_id=user_id, limit=200)
+    return jsonify({"user_id": user_id, "memories": memories}), 200
+
+
+@app.post("/api/user-memories")
+def add_user_memory():
+    data = request.get_json(silent=True) or {}
+    user_id = (data.get("user_id") or "").strip()
+    field_key = (data.get("field_key") or "").strip().lower()
+    fact = (data.get("fact") or "").strip()
+    if not user_id:
+        return jsonify({"error": "missing user_id"}), 400
+    if not field_key:
+        return jsonify({"error": "missing field_key"}), 400
+    if not fact:
+        return jsonify({"error": "missing fact"}), 400
+
+    _memory_store().add_user_memory(
+        user_id=user_id,
+        field_key=field_key,
+        fact=fact,
+        source="settings_ui",
+    )
+    memories = _memory_store().list_user_memories(user_id=user_id, limit=200)
+    return jsonify({"user_id": user_id, "memories": memories}), 200
+
+
+@app.delete("/api/user-memories")
+def delete_user_memory():
+    user_id = request.args.get("user_id", "").strip()
+    field_key = request.args.get("field_key", "").strip().lower()
+    memory_id = request.args.get("memory_id", "").strip()
+    if not user_id:
+        return jsonify({"error": "missing user_id"}), 400
+    if not field_key and not memory_id:
+        return jsonify({"error": "missing field_key or memory_id"}), 400
+
+    deleted_count = _memory_store().delete_user_memory(
+        user_id=user_id,
+        field_key=field_key,
+        memory_id=memory_id,
+    )
+    memories = _memory_store().list_user_memories(user_id=user_id, limit=200)
+    return jsonify(
+        {
+            "user_id": user_id,
+            "deleted_count": deleted_count,
+            "memories": memories,
+        }
+    ), 200
+
+
+@app.get("/api/agent-memories")
+def get_agent_memories():
+    store = _memory_store()
+    memories = store.list_agent_memories(limit=200)
+    return jsonify(
+        {
+            "agent_id": session.get_agent_id(),
+            "memories": memories,
+        }
+    ), 200
+
+
 @app.get("/api/extension/health")
 def api_extension_health():
     running = is_server_running()
@@ -151,14 +226,15 @@ def relay():
         user_id = request.args.get("user_id", "")
 
     msg = (message or "").strip()
-    uid = (user_id or "").strip() or None
+    uid = (user_id or "").strip()
 
     if msg.upper().startswith("GOAL:"):
         goal = msg.split(":", 1)[-1].strip()
         if not goal:
             return _sse([{"message": "Missing goal text after GOAL:"}, {"done": True}])
 
-        session.set_user_id(uid)
+        if uid:
+            session.set_user_id(uid)
         session.start(goal, restart_if_running=True)
 
         def stream_agent():

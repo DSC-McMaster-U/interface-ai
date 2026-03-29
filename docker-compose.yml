@@ -2,15 +2,15 @@ services:
   backend:
     build: ./backend
     ports:
-      - "5050:5000"
+      - "5000:5000"
       - "7878:7878"
     volumes:
       - ./backend:/app
     environment:
       - REDIS_URL=redis://redis:6379
-      - DATABASE_URL=postgresql://user:password@postgres:5432/interfaceai
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:%3DJVO7L6%3D%40%3EqYO%24m%2C@34.130.177.250:5432/interfaceai-db?sslmode=require}
       - MEMORY_BACKEND=${MEMORY_BACKEND:-mem0}
-      - MEMORY_DATABASE_URL=${MEMORY_DATABASE_URL:-}
+      - MEMORY_DATABASE_URL=${MEMORY_DATABASE_URL:-postgresql://postgres:%3DJVO7L6%3D%40%3EqYO%24m%2C@34.130.177.250:5432/interfaceai-db?sslmode=require}
       - MEMORY_AUTO_MIGRATE=${MEMORY_AUTO_MIGRATE:-1}
       - MEMORY_USE_PGVECTOR=${MEMORY_USE_PGVECTOR:-0}
       - MEMORY_VECTOR_DIM=${MEMORY_VECTOR_DIM:-768}

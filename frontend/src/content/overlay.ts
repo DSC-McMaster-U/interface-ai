@@ -17,16 +17,25 @@ import {
 import {
   SETTINGS_STYLES,
   renderSettings,
+  renderAgentMemoriesPage,
   renderSignIn,
   setupSettingsListeners,
   fetchUserSettings,
+  fetchUserMemories,
+  fetchAgentMemories,
   updateUserSettings,
+  addUserMemory,
+  deleteUserMemory,
+  getCachedUserMemories,
+  setCachedUserMemories,
+  getCachedAgentMemories,
+  setCachedAgentMemories,
   requestGoogleSignIn,
   requestGoogleSignOut,
   getAuthState,
 } from "./settings";
 import { TEST_PANEL_STYLES, setupTestPanel } from "./test-panel";
-import type { UserSettings, AuthUser } from "./types";
+import type { UserSettings, AuthUser, UserMemory } from "./types";
 
 export class InterfaceAIOverlay {
   private shadowRoot: ShadowRoot | null = null;
@@ -38,6 +47,9 @@ export class InterfaceAIOverlay {
 
   private readonly visibilityStorageKey = "interface_ai_overlay_hidden";
   private authUser: AuthUser | null = null;
+  private userMemories: UserMemory[] = [];
+  private agentMemories: UserMemory[] = [];
+  private agentId = "";
 
   constructor() {
     this.init();
@@ -56,81 +68,65 @@ export class InterfaceAIOverlay {
   }
 
   private init(): void {
-    // Prevent duplicate injection
     if (document.getElementById("interface-ai-root")) {
       console.log("[InterfaceAI] Overlay already exists, skipping injection");
       return;
     }
 
-    // Create the host element
     const host = document.createElement("div");
     host.id = "interface-ai-root";
     document.body.appendChild(host);
 
-    // Attach Shadow DOM
     this.shadowRoot = host.attachShadow({ mode: "open" });
 
-    // Inject styles into Shadow DOM
     const styleElement = document.createElement("style");
     styleElement.textContent =
       OVERLAY_STYLES + SETTINGS_STYLES + TEST_PANEL_STYLES;
     this.shadowRoot.appendChild(styleElement);
 
-    // Inject HTML into Shadow DOM
     const wrapper = document.createElement("div");
-    // Replace logo placeholder with actual runtime URL
     const logoUrl = chrome.runtime.getURL("logo_128.png");
     wrapper.innerHTML = OVERLAY_HTML.replace("{{LOGO_URL}}", logoUrl);
     this.shadowRoot.appendChild(wrapper);
 
-    // Get reference to main container
     this.container = this.shadowRoot.getElementById("interface-ai-main");
-
-    // Setup event listeners
     this.setupEventListeners();
-
     this.restoreState();
 
     console.log("[InterfaceAI] Overlay injected successfully");
   }
 
   private setupEventListeners(): void {
-    // Dragging
     setupDragging(this.shadowRoot, this.container, {
       isDragging: this.isDragging,
       dragOffset: this.dragOffset,
     });
 
-    // Resizing
     setupResizing(this.shadowRoot, this.container, {
       isResizing: this.isResizing,
       resizeStart: this.resizeStart,
     });
 
-    // Buttons
     setupButtons(
       this.shadowRoot,
       this.container,
       () => this.toggleSettings(),
+      () => this.toggleAgents(),
       () => this.toggleTest(),
       () => this.persistVisibility(true),
     );
 
-    // Test panel
     setupTestPanel(this.shadowRoot);
 
-    // Input handling
     setupInput(this.shadowRoot, {
       addMessage: (text, type) => addMessage(this.shadowRoot, text, type),
       showLoading: (show) => showLoading(this.shadowRoot, show),
     });
 
-    // Keyboard shortcuts - listen for chrome.commands
     this.setupKeyboardShortcuts();
   }
 
   private setupKeyboardShortcuts(): void {
-    // Listen for command shortcuts from background script
     chrome.runtime.onMessage.addListener((message) => {
       if (message.type === "OPEN_SETTINGS") {
         this.toggleSettings();
@@ -138,44 +134,70 @@ export class InterfaceAIOverlay {
     });
   }
 
-  private toggleSettings(): void {
+  private hideNonTargetViews(target: "chat" | "settings" | "agents" | "test"): void {
     const chatView = this.shadowRoot?.getElementById("chat-view");
     const settingsView = this.shadowRoot?.getElementById("settings-view");
+    const agentsView = this.shadowRoot?.getElementById("agents-view");
     const testView = this.shadowRoot?.getElementById("test-view");
-    if (!chatView || !settingsView || !testView) return;
+    if (!chatView || !settingsView || !agentsView || !testView) return;
+
+    if (target === "chat") {
+      chatView.classList.remove("hidden");
+    } else {
+      chatView.classList.add("hidden");
+    }
+    if (target === "settings") {
+      settingsView.classList.remove("hidden");
+    } else {
+      settingsView.classList.add("hidden");
+    }
+    if (target === "agents") {
+      agentsView.classList.remove("hidden");
+    } else {
+      agentsView.classList.add("hidden");
+    }
+    if (target === "test") {
+      testView.classList.remove("hidden");
+    } else {
+      testView.classList.add("hidden");
+    }
+  }
+
+  private toggleSettings(): void {
+    const settingsView = this.shadowRoot?.getElementById("settings-view");
+    if (!settingsView) return;
 
     if (settingsView.classList.contains("hidden")) {
-      testView.classList.add("hidden");
-      this.openSettings();
+      void this.openSettings();
     } else {
-      this.closeSettings();
+      this.closeToChat();
+    }
+  }
+
+  private toggleAgents(): void {
+    const agentsView = this.shadowRoot?.getElementById("agents-view");
+    if (!agentsView) return;
+
+    if (agentsView.classList.contains("hidden")) {
+      void this.openAgents();
+    } else {
+      this.closeToChat();
     }
   }
 
   private toggleTest(): void {
-    const chatView = this.shadowRoot?.getElementById("chat-view");
-    const settingsView = this.shadowRoot?.getElementById("settings-view");
     const testView = this.shadowRoot?.getElementById("test-view");
-    if (!chatView || !settingsView || !testView) return;
+    if (!testView) return;
 
     if (testView.classList.contains("hidden")) {
       this.openTest();
     } else {
-      this.closeTest();
+      this.closeToChat();
     }
   }
 
   private openTest(): void {
-    const chatView = this.shadowRoot?.getElementById("chat-view");
-    const settingsView = this.shadowRoot?.getElementById("settings-view");
-    const testView = this.shadowRoot?.getElementById("test-view");
-    if (!chatView || !settingsView || !testView) return;
-
-    chatView.classList.add("hidden");
-    settingsView.classList.add("hidden");
-    testView.classList.remove("hidden");
-
-    // Focus command input
+    this.hideNonTargetViews("test");
     setTimeout(() => {
       (
         this.shadowRoot?.getElementById("test-cmd-input") as HTMLInputElement
@@ -183,37 +205,21 @@ export class InterfaceAIOverlay {
     }, 50);
   }
 
-  private closeTest(): void {
-    const chatView = this.shadowRoot?.getElementById("chat-view");
-    const settingsView = this.shadowRoot?.getElementById("settings-view");
-    const testView = this.shadowRoot?.getElementById("test-view");
-    if (!chatView || !settingsView || !testView) return;
-
-    testView.classList.add("hidden");
-    chatView.classList.remove("hidden");
-    this.focusInput();
-  }
-
   private async openSettings(): Promise<void> {
-    const chatView = this.shadowRoot?.getElementById("chat-view");
-    const settingsView = this.shadowRoot?.getElementById("settings-view");
-    if (!chatView || !settingsView) return;
-
-    // Hide chat and show settings
-    chatView.classList.add("hidden");
-    settingsView.classList.remove("hidden");
-
-    // Check auth state first
+    this.hideNonTargetViews("settings");
     this.authUser = await getAuthState();
 
     if (!this.authUser) {
-      // Not signed in – show sign-in screen
       renderSignIn(this.shadowRoot, () => this.handleSignIn());
       return;
     }
 
-    // Signed in – fetch and show profile
     await this.loadAndRenderProfile();
+  }
+
+  private async openAgents(): Promise<void> {
+    this.hideNonTargetViews("agents");
+    await this.loadAndRenderAgentMemories();
   }
 
   private async handleSignIn(): Promise<void> {
@@ -232,7 +238,6 @@ export class InterfaceAIOverlay {
       this.authUser = result.user;
       await this.loadAndRenderProfile();
     } else {
-      // Sign-in failed or cancelled, show sign-in again with error
       renderSignIn(
         this.shadowRoot,
         () => this.handleSignIn(),
@@ -244,25 +249,17 @@ export class InterfaceAIOverlay {
   private async handleSignOut(): Promise<void> {
     await requestGoogleSignOut();
     this.authUser = null;
+    this.userMemories = [];
     renderSignIn(this.shadowRoot, () => this.handleSignIn());
   }
 
   private async loadAndRenderProfile(): Promise<void> {
     const settings = await fetchUserSettings();
-    if (settings) {
-      renderSettings(this.shadowRoot, settings, this.authUser, () =>
-        this.handleSignOut(),
-      );
+    const memories = this.authUser?.userId
+      ? await getCachedUserMemories(this.authUser.userId)
+      : null;
 
-      // Setup event listeners for editing
-      setupSettingsListeners(
-        this.shadowRoot,
-        settings,
-        async (updatedSettings) => {
-          await this.handleSettingsUpdate(updatedSettings);
-        },
-      );
-    } else {
+    if (!settings) {
       const settingsContent =
         this.shadowRoot?.getElementById("settings-content");
       if (settingsContent) {
@@ -272,32 +269,121 @@ export class InterfaceAIOverlay {
           </div>
         `;
       }
+      return;
     }
+
+    this.userMemories = memories || [];
+    renderSettings(
+      this.shadowRoot,
+      settings,
+      this.userMemories,
+      this.authUser,
+      () => this.handleSignOut(),
+    );
+
+    setupSettingsListeners(
+      this.shadowRoot,
+      settings,
+      this.userMemories,
+      async (updatedSettings) => {
+        await this.handleSettingsUpdate(updatedSettings);
+      },
+      async (fieldKey, fact) => {
+        await this.handleAddMemory(fieldKey, fact);
+      },
+      async (memory) => {
+        await this.handleDeleteMemory(memory);
+      },
+      async () => {
+        await this.reloadUserMemories();
+      },
+    );
   }
 
   private async handleSettingsUpdate(
     updatedSettings: UserSettings,
   ): Promise<void> {
     const success = await updateUserSettings(updatedSettings);
-    if (success) {
-      renderSettings(this.shadowRoot, updatedSettings, this.authUser, () =>
-        this.handleSignOut(),
-      );
-      setupSettingsListeners(this.shadowRoot, updatedSettings, async (s) => {
-        await this.handleSettingsUpdate(s);
-      });
-    }
+    if (!success) return;
+
+    renderSettings(
+      this.shadowRoot,
+      updatedSettings,
+      this.userMemories,
+      this.authUser,
+      () => this.handleSignOut(),
+    );
+    setupSettingsListeners(
+      this.shadowRoot,
+      updatedSettings,
+      this.userMemories,
+      async (settings) => {
+        await this.handleSettingsUpdate(settings);
+      },
+      async (fieldKey, fact) => {
+        await this.handleAddMemory(fieldKey, fact);
+      },
+      async (memory) => {
+        await this.handleDeleteMemory(memory);
+      },
+      async () => {
+        await this.reloadUserMemories();
+      },
+    );
   }
 
-  private closeSettings(): void {
-    const chatView = this.shadowRoot?.getElementById("chat-view");
-    const settingsView = this.shadowRoot?.getElementById("settings-view");
-    const testView = this.shadowRoot?.getElementById("test-view");
-    if (!chatView || !settingsView || !testView) return;
+  private async handleAddMemory(fieldKey: string, fact: string): Promise<void> {
+    const memories = await addUserMemory(fieldKey, fact);
+    if (!memories) return;
+    this.userMemories = memories;
+    if (this.authUser?.userId) {
+      await setCachedUserMemories(this.authUser.userId, memories);
+    }
+    await this.loadAndRenderProfile();
+  }
 
-    settingsView.classList.add("hidden");
-    testView.classList.add("hidden");
-    chatView.classList.remove("hidden");
+  private async handleDeleteMemory(memory: UserMemory): Promise<void> {
+    const memories = await deleteUserMemory(memory);
+    if (!memories) return;
+    this.userMemories = memories;
+    if (this.authUser?.userId) {
+      await setCachedUserMemories(this.authUser.userId, memories);
+    }
+    await this.loadAndRenderProfile();
+  }
+
+  private async reloadUserMemories(): Promise<void> {
+    if (!this.authUser?.userId) return;
+    const memories = await fetchUserMemories();
+    if (!memories) return;
+    this.userMemories = memories;
+    await setCachedUserMemories(this.authUser.userId, memories);
+    await this.loadAndRenderProfile();
+  }
+
+  private async loadAndRenderAgentMemories(): Promise<void> {
+    const cached = await getCachedAgentMemories();
+    this.agentMemories = cached?.memories || [];
+    this.agentId = cached?.agentId || "";
+    renderAgentMemoriesPage(this.shadowRoot, this.agentMemories, this.agentId);
+
+    const reloadBtn = this.shadowRoot?.getElementById("reload-agent-memories-btn");
+    reloadBtn?.addEventListener("click", async () => {
+      await this.reloadAgentMemories();
+    });
+  }
+
+  private async reloadAgentMemories(): Promise<void> {
+    const payload = await fetchAgentMemories();
+    if (!payload) return;
+    this.agentMemories = payload.memories;
+    this.agentId = payload.agentId;
+    await setCachedAgentMemories(payload);
+    await this.loadAndRenderAgentMemories();
+  }
+
+  private closeToChat(): void {
+    this.hideNonTargetViews("chat");
     this.focusInput();
   }
 
@@ -344,7 +430,6 @@ export class InterfaceAIOverlay {
   }
 
   private focusInput(): void {
-    // Small delay to ensure DOM is ready after visibility change
     setTimeout(() => {
       const input = this.shadowRoot?.getElementById(
         "message-input",

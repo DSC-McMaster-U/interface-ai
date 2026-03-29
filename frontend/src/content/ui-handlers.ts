@@ -1117,6 +1117,7 @@ export function setupButtons(
   shadowRoot: ShadowRoot | null,
   container: HTMLElement | null,
   onSettingsClick?: () => void,
+  onAgentsClick?: () => void,
   onTestClick?: () => void,
   onCloseClick?: () => void,
 ): void {
@@ -1129,6 +1130,11 @@ export function setupButtons(
   const settingsBtn = shadowRoot?.getElementById("settings-btn");
   settingsBtn?.addEventListener("click", () => {
     if (onSettingsClick) onSettingsClick();
+  });
+
+  const agentsBtn = shadowRoot?.getElementById("agents-btn");
+  agentsBtn?.addEventListener("click", () => {
+    if (onAgentsClick) onAgentsClick();
   });
 
   const testBtn = shadowRoot?.getElementById("test-btn");

@@ -49,6 +49,14 @@ export interface UserSettings {
   interests: string[];
 }
 
+export interface UserMemory {
+  id: string;
+  fact: string;
+  field_key: string;
+  updated_at?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface GetUserSettingsMessage {
   type: "GET_USER_SETTINGS";
 }
@@ -56,6 +64,30 @@ export interface GetUserSettingsMessage {
 export interface UpdateUserSettingsMessage {
   type: "UPDATE_USER_SETTINGS";
   payload: UserSettings;
+}
+
+export interface GetUserMemoriesMessage {
+  type: "GET_USER_MEMORIES";
+}
+
+export interface AddUserMemoryMessage {
+  type: "ADD_USER_MEMORY";
+  payload: {
+    field_key: string;
+    fact: string;
+  };
+}
+
+export interface DeleteUserMemoryMessage {
+  type: "DELETE_USER_MEMORY";
+  payload: {
+    memory_id?: string;
+    field_key?: string;
+  };
+}
+
+export interface GetAgentMemoriesMessage {
+  type: "GET_AGENT_MEMORIES";
 }
 
 export interface GoogleSignInMessage {

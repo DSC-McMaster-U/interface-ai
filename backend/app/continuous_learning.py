@@ -4,6 +4,7 @@ from typing import Any
 from urllib.parse import quote, urlparse
 
 import psycopg
+from app.db import normalize_user_id
 
 _HARDCODED_DB_HOST = "34.130.177.250"
 _HARDCODED_DB_PORT = 5432
@@ -20,6 +21,19 @@ def _hardcoded_db_url() -> str:
         f"@{_HARDCODED_DB_HOST}:{_HARDCODED_DB_PORT}/{_HARDCODED_DB_NAME}"
         f"?sslmode={_HARDCODED_DB_SSLMODE}"
     )
+
+
+def _user_id_variants(user_id: str) -> list[str]:
+    raw_user_id = (user_id or "").strip()
+    if not raw_user_id:
+        return []
+    canonical_user_id = normalize_user_id(raw_user_id)
+    variants: list[str] = []
+    for candidate in (canonical_user_id, raw_user_id):
+        normalized = (candidate or "").strip()
+        if normalized and normalized not in variants:
+            variants.append(normalized)
+    return variants
 
 
 def _normalize_text(value: str) -> str:
@@ -232,12 +246,20 @@ class Mem0MemoryStore:
         user_id: str,
         field_key: str,
     ) -> list[dict[str, Any]]:
-        response = self.user_client.get_all(user_id=user_id.strip(), limit=200)
-        return [
-            item
-            for item in self._normalize_results(response)
-            if item.get("field_key") == field_key
-        ]
+        results: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        for candidate_user_id in _user_id_variants(user_id):
+            response = self.user_client.get_all(user_id=candidate_user_id, limit=200)
+            for item in self._normalize_results(response):
+                if item.get("field_key") != field_key:
+                    continue
+                item_id = str(item.get("id") or "").strip()
+                if item_id and item_id in seen_ids:
+                    continue
+                if item_id:
+                    seen_ids.add(item_id)
+                results.append(item)
+        return results
 
     def add_user_memory(
         self,
@@ -249,7 +271,8 @@ class Mem0MemoryStore:
     ) -> None:
         if not user_id or not fact:
             return
-        normalized_user_id = user_id.strip()
+        user_id_variants = _user_id_variants(user_id)
+        normalized_user_id = user_id_variants[0] if user_id_variants else ""
         normalized_fact = fact.strip()
         normalized_field_key = field_key.strip()
         metadata = {
@@ -286,15 +309,102 @@ class Mem0MemoryStore:
     ) -> list[dict[str, Any]]:
         if not user_id:
             return []
-        response = self.user_client.search(
-            query or "What do you know about this user?",
-            user_id=user_id.strip(),
-            limit=max(limit * 3, 20),
-        )
-        results = self._normalize_results(response)
+        results: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        seen_facts: set[str] = set()
+        for candidate_user_id in _user_id_variants(user_id):
+            response = self.user_client.search(
+                query or "What do you know about this user?",
+                user_id=candidate_user_id,
+                limit=max(limit * 3, 20),
+            )
+            for item in self._normalize_results(response):
+                item_id = str(item.get("id") or "").strip()
+                fact_key = str(item.get("fact") or "").strip().lower()
+                if item_id and item_id in seen_ids:
+                    continue
+                if fact_key and fact_key in seen_facts:
+                    continue
+                if item_id:
+                    seen_ids.add(item_id)
+                if fact_key:
+                    seen_facts.add(fact_key)
+                results.append(item)
         if field_key:
             results = [item for item in results if item.get("field_key") == field_key]
         return results[:limit]
+
+    def list_user_memories(
+        self,
+        *,
+        user_id: str,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        if not user_id:
+            return []
+        results: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        for candidate_user_id in _user_id_variants(user_id):
+            response = self.user_client.get_all(
+                user_id=candidate_user_id, limit=max(limit, 20)
+            )
+            for item in self._normalize_results(response):
+                item_id = str(item.get("id") or "").strip()
+                if item_id and item_id in seen_ids:
+                    continue
+                if item_id:
+                    seen_ids.add(item_id)
+                results.append(item)
+        deduped: list[dict[str, Any]] = []
+        seen_keys: set[str] = set()
+        seen_facts: set[str] = set()
+        for item in results:
+            field_key = str(item.get("field_key") or "").strip().lower()
+            fact = str(item.get("fact") or "").strip()
+            if not fact:
+                continue
+            dedupe_key = field_key or fact.lower()
+            if dedupe_key in seen_keys or fact.lower() in seen_facts:
+                continue
+            seen_keys.add(dedupe_key)
+            seen_facts.add(fact.lower())
+            deduped.append(item)
+            if len(deduped) >= limit:
+                break
+        return deduped
+
+    def delete_user_memory(
+        self,
+        *,
+        user_id: str,
+        field_key: str = "",
+        memory_id: str = "",
+    ) -> int:
+        user_id_variants = _user_id_variants(user_id)
+        normalized_user_id = user_id_variants[0] if user_id_variants else ""
+        normalized_memory_id = (memory_id or "").strip()
+        normalized_field_key = (field_key or "").strip().lower()
+        if not normalized_user_id:
+            return 0
+
+        if normalized_memory_id:
+            self.user_client.delete(memory_id=normalized_memory_id)
+            return 1
+
+        if not normalized_field_key:
+            return 0
+
+        deleted = 0
+        for item in self._get_user_memories_for_field(
+            user_id=normalized_user_id,
+            field_key=normalized_field_key,
+        ):
+            candidate_id = str(item.get("id") or "").strip()
+            if not candidate_id:
+                continue
+            self.user_client.delete(memory_id=candidate_id)
+            deleted += 1
+        return deleted
 
     def add_agent_memory(
         self,
@@ -359,6 +469,30 @@ class Mem0MemoryStore:
 
         results.sort(key=score, reverse=True)
         return results[:limit]
+
+    def list_agent_memories(
+        self,
+        *,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        if not self.agent_id:
+            return []
+        response = self.agent_client.get_all(agent_id=self.agent_id, limit=max(limit, 20))
+        results = self._normalize_results(response)
+        deduped: list[dict[str, Any]] = []
+        seen_facts: set[str] = set()
+        for item in results:
+            fact = str(item.get("fact") or "").strip()
+            if not fact:
+                continue
+            fact_key = fact.lower()
+            if fact_key in seen_facts:
+                continue
+            seen_facts.add(fact_key)
+            deduped.append(item)
+            if len(deduped) >= limit:
+                break
+        return deduped
 
 
 class PostgresMemoryStore:
@@ -760,6 +894,126 @@ class PostgresMemoryStore:
         scored.sort(key=lambda pair: (pair[0], pair[1]["updated_at"]), reverse=True)
         return [item for _, item in scored[:limit]]
 
+    def list_agent_memories(
+        self,
+        *,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        if not self.agent_id:
+            return []
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, data, created_at
+                    FROM memories
+                    WHERE kind = 'agent_playbook'
+                      AND thread_id = %s
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                    """,
+                    (self.agent_id, max(limit * 3, 50)),
+                )
+                rows = cur.fetchall()
+
+        deduped: list[dict[str, Any]] = []
+        seen_facts: set[str] = set()
+        for row in rows:
+            metadata = self._as_dict(row[1])
+            fact = str(metadata.get("fact") or "").strip()
+            if not fact:
+                continue
+            fact_key = fact.lower()
+            if fact_key in seen_facts:
+                continue
+            seen_facts.add(fact_key)
+            metadata.setdefault("domain", "")
+            metadata.setdefault("target_domain", "")
+            metadata.setdefault("task_type", "")
+            metadata.setdefault("confidence", 0.0)
+            deduped.append(
+                {
+                    "id": str(row[0]),
+                    "fact": fact,
+                    "metadata": metadata,
+                    "field_key": metadata.get("field_key", ""),
+                    "updated_at": row[2].isoformat() if row[2] else "",
+                }
+            )
+            if len(deduped) >= limit:
+                break
+        return deduped
+
+    def list_user_memories(
+        self,
+        *,
+        user_id: str,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        return self.search_user_memories(user_id=user_id, query="", limit=limit)
+
+    def delete_user_memory(
+        self,
+        *,
+        user_id: str,
+        field_key: str = "",
+        memory_id: str = "",
+    ) -> int:
+        normalized_user_id = (user_id or "").strip()
+        normalized_field_key = (field_key or "").strip().lower()
+        normalized_memory_id = (memory_id or "").strip()
+        if not normalized_user_id:
+            return 0
+
+        deleted = 0
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                if normalized_memory_id and normalized_memory_id.isdigit():
+                    cur.execute(
+                        """
+                        DELETE FROM memories
+                        WHERE id = %s
+                          AND user_id = %s
+                          AND kind = 'user_profile'
+                        """,
+                        (int(normalized_memory_id), normalized_user_id),
+                    )
+                    deleted += cur.rowcount or 0
+
+                if normalized_field_key:
+                    cur.execute(
+                        "SELECT preferences FROM profiles WHERE user_id = %s",
+                        (normalized_user_id,),
+                    )
+                    row = cur.fetchone()
+                    preferences = self._as_dict(row[0]) if row else {}
+                    if normalized_field_key in preferences:
+                        preferences.pop(normalized_field_key, None)
+                        cur.execute(
+                            """
+                            INSERT INTO profiles (user_id, preferences, created_at, updated_at)
+                            VALUES (%s, %s::jsonb, NOW(), NOW())
+                            ON CONFLICT (user_id)
+                            DO UPDATE SET
+                                preferences = EXCLUDED.preferences,
+                                updated_at = NOW()
+                            """,
+                            (normalized_user_id, json.dumps(preferences)),
+                        )
+
+                    cur.execute(
+                        """
+                        DELETE FROM memories
+                        WHERE user_id = %s
+                          AND kind = 'user_profile'
+                          AND data->>'field_key' = %s
+                        """,
+                        (normalized_user_id, normalized_field_key),
+                    )
+                    deleted += cur.rowcount or 0
+            conn.commit()
+        return deleted
+
     def add_agent_memory(
         self,
         *,
@@ -952,6 +1206,30 @@ class BrowserMemoryStore:
             limit=limit,
         )
 
+    def list_user_memories(
+        self,
+        *,
+        user_id: str,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        return self.impl.list_user_memories(
+            user_id=user_id,
+            limit=limit,
+        )
+
+    def delete_user_memory(
+        self,
+        *,
+        user_id: str,
+        field_key: str = "",
+        memory_id: str = "",
+    ) -> int:
+        return self.impl.delete_user_memory(
+            user_id=user_id,
+            field_key=field_key,
+            memory_id=memory_id,
+        )
+
     def add_agent_memory(
         self,
         *,
@@ -987,3 +1265,10 @@ class BrowserMemoryStore:
             task_type=task_type,
             limit=limit,
         )
+
+    def list_agent_memories(
+        self,
+        *,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        return self.impl.list_agent_memories(limit=limit)

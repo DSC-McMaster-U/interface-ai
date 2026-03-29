@@ -28,6 +28,30 @@ interface UpdateUserSettingsMessage {
   payload: UserSettings;
 }
 
+interface GetUserMemoriesMessage {
+  type: "GET_USER_MEMORIES";
+}
+
+interface AddUserMemoryMessage {
+  type: "ADD_USER_MEMORY";
+  payload: {
+    field_key: string;
+    fact: string;
+  };
+}
+
+interface DeleteUserMemoryMessage {
+  type: "DELETE_USER_MEMORY";
+  payload: {
+    memory_id?: string;
+    field_key?: string;
+  };
+}
+
+interface GetAgentMemoriesMessage {
+  type: "GET_AGENT_MEMORIES";
+}
+
 interface ExecuteActionMessage {
   type: "EXECUTE_ACTION";
   payload: Record<string, unknown>;
@@ -53,6 +77,14 @@ interface AuthUser {
   email: string;
   name?: string;
   picture?: string;
+}
+
+interface UserMemory {
+  id: string;
+  fact: string;
+  field_key: string;
+  updated_at?: string;
+  metadata?: Record<string, unknown>;
 }
 
 let agentTargetTabId: number | null = null;
@@ -290,6 +322,119 @@ async function updateUserSettings(
       success: false,
       error:
         error instanceof Error ? error.message : "Failed to update settings",
+    };
+  }
+}
+
+async function getUserMemories(): Promise<ApiResponse> {
+  const user = await getStoredAuth();
+  if (!user) {
+    return { success: false, error: "not_authenticated" };
+  }
+
+  try {
+    const resp = await fetch(
+      `${BACKEND_API}/api/user-memories?user_id=${encodeURIComponent(user.userId)}`,
+    );
+    if (!resp.ok) {
+      return { success: false, error: `HTTP ${resp.status}` };
+    }
+    const payload = (await resp.json()) as {
+      memories?: UserMemory[];
+    };
+    return { success: true, data: payload.memories || [] };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to load memories",
+    };
+  }
+}
+
+async function addUserMemory(payload: {
+  field_key: string;
+  fact: string;
+}): Promise<ApiResponse> {
+  const user = await getStoredAuth();
+  if (!user) {
+    return { success: false, error: "not_authenticated" };
+  }
+
+  try {
+    const resp = await fetch(`${BACKEND_API}/api/user-memories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: user.userId,
+        field_key: payload.field_key,
+        fact: payload.fact,
+      }),
+    });
+    if (!resp.ok) {
+      return { success: false, error: `HTTP ${resp.status}` };
+    }
+    const data = (await resp.json()) as { memories?: UserMemory[] };
+    return { success: true, data: data.memories || [] };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to add memory",
+    };
+  }
+}
+
+async function deleteUserMemory(payload: {
+  memory_id?: string;
+  field_key?: string;
+}): Promise<ApiResponse> {
+  const user = await getStoredAuth();
+  if (!user) {
+    return { success: false, error: "not_authenticated" };
+  }
+
+  const params = new URLSearchParams({ user_id: user.userId });
+  if (payload.memory_id) params.set("memory_id", payload.memory_id);
+  if (payload.field_key) params.set("field_key", payload.field_key);
+
+  try {
+    const resp = await fetch(`${BACKEND_API}/api/user-memories?${params.toString()}`, {
+      method: "DELETE",
+    });
+    if (!resp.ok) {
+      return { success: false, error: `HTTP ${resp.status}` };
+    }
+    const data = (await resp.json()) as { memories?: UserMemory[] };
+    return { success: true, data: data.memories || [] };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to delete memory",
+    };
+  }
+}
+
+async function getAgentMemories(): Promise<ApiResponse> {
+  try {
+    const resp = await fetch(`${BACKEND_API}/api/agent-memories`);
+    if (!resp.ok) {
+      return { success: false, error: `HTTP ${resp.status}` };
+    }
+    const payload = (await resp.json()) as {
+      memories?: UserMemory[];
+      agent_id?: string;
+    };
+    return {
+      success: true,
+      data: {
+        memories: payload.memories || [],
+        agentId: payload.agent_id || "",
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to load agent memories",
     };
   }
 }
@@ -536,6 +681,10 @@ chrome.runtime.onMessage.addListener(
       | ApiRequestMessage
       | GetUserSettingsMessage
       | UpdateUserSettingsMessage
+      | GetUserMemoriesMessage
+      | AddUserMemoryMessage
+      | DeleteUserMemoryMessage
+      | GetAgentMemoriesMessage
       | ExecuteActionMessage
       | { type: string },
     _sender: chrome.runtime.MessageSender,
@@ -638,6 +787,60 @@ chrome.runtime.onMessage.addListener(
               error instanceof Error
                 ? error.message
                 : "Failed to update settings",
+          });
+        });
+      return true;
+    }
+
+    if (message.type === "GET_USER_MEMORIES") {
+      getUserMemories()
+        .then(sendResponse)
+        .catch((error) => {
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error ? error.message : "Failed to get memories",
+          });
+        });
+      return true;
+    }
+
+    if (message.type === "ADD_USER_MEMORY") {
+      addUserMemory((message as AddUserMemoryMessage).payload)
+        .then(sendResponse)
+        .catch((error) => {
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error ? error.message : "Failed to add memory",
+          });
+        });
+      return true;
+    }
+
+    if (message.type === "DELETE_USER_MEMORY") {
+      deleteUserMemory((message as DeleteUserMemoryMessage).payload)
+        .then(sendResponse)
+        .catch((error) => {
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error ? error.message : "Failed to delete memory",
+          });
+        });
+      return true;
+    }
+
+    if (message.type === "GET_AGENT_MEMORIES") {
+      getAgentMemories()
+        .then(sendResponse)
+        .catch((error) => {
+          sendResponse({
+            success: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Failed to get agent memories",
           });
         });
       return true;
