@@ -24,9 +24,12 @@ if __name__ == "__main__":
         base_name = os.path.splitext(os.path.basename(image_path))[0]
         if base_name.startswith("input-"):
             base_name = base_name[6:]
-        output_path = f"output-images/output-{base_name}.png"
+        test_dir = os.path.dirname(os.path.abspath(__file__))
+        output_path = os.path.join(test_dir, "output-images", f"output-{base_name}.png")
         
-    # Ensure directories exist
-    os.makedirs("output-images", exist_ok=True)
+    # Ensure directory exists for the output path
+    output_dir = os.path.dirname(os.path.abspath(output_path))
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
         
     process_image(image_path, query, output_path)

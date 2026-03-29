@@ -21,7 +21,10 @@ from dotenv import load_dotenv
 # Suppress memory warning for non-GPU environments
 warnings.filterwarnings('ignore', message='.*pin_memory.*no accelerator.*')
 
-load_dotenv()
+# Load environment variables from the root .env file
+root_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+load_dotenv(dotenv_path=root_env_path)
+
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 if not GEMINI_API_KEY:
     print("Error: GEMINI_API_KEY not found in .env file.")

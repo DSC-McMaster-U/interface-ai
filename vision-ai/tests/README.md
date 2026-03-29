@@ -45,4 +45,4 @@ python test_vision.py tests/input-images/input-icons.png "gear icon"
 python test_vision.py tests/input-images/input-wikipedia.png "log in"
 ```
 
-The output file (with bounding boxes drawn) will default to `output-images/output-<filename>.png` in the directory you run it from, but you can optionally override this by specifying the final `[output_path]` argument.
+The output file (with bounding boxes drawn) will default to the `output-images/` folder inside this `tests` directory (`vision-ai/tests/output-images/output-<filename>.png`), but you can optionally override this by specifying the final `[output_path]` argument.
