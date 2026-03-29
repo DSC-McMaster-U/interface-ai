@@ -165,7 +165,7 @@ def _handle_non_goal_command(msg: str) -> list[dict[str, object]]:
 def _sse(items):
     def event_stream():
         for item in items:
-            yield f"data: {json.dumps(item)}\\n\\n"
+            yield f"data: {json.dumps(item)}\n\n"
 
     return Response(
         stream_with_context(event_stream()),
