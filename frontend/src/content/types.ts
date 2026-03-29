@@ -32,6 +32,14 @@ export interface ExecuteActionMessage {
   payload: ActionType;
 }
 
+/** Authenticated Google user info */
+export interface AuthUser {
+  userId: string;
+  email: string;
+  name?: string;
+  picture?: string;
+}
+
 export interface UserSettings {
   name: string;
   gender: string;
@@ -48,4 +56,16 @@ export interface GetUserSettingsMessage {
 export interface UpdateUserSettingsMessage {
   type: "UPDATE_USER_SETTINGS";
   payload: UserSettings;
+}
+
+export interface GoogleSignInMessage {
+  type: "GOOGLE_SIGN_IN";
+}
+
+export interface GoogleSignOutMessage {
+  type: "GOOGLE_SIGN_OUT";
+}
+
+export interface GetAuthStateMessage {
+  type: "GET_AUTH_STATE";
 }

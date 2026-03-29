@@ -1,11 +1,12 @@
 /**
  * Settings page functionality for user profile management
  *
- * TODO Change the UI of settings
+ * Supports Google Sign-In and displays profile data from the database.
  */
 
 import type {
   UserSettings,
+  AuthUser,
   GetUserSettingsMessage,
   UpdateUserSettingsMessage,
   ApiResponse,
@@ -213,19 +214,178 @@ export const SETTINGS_STYLES = `
     width: 16px;
     height: 16px;
   }
+
+  /* ---------- Auth / Sign-In ---------- */
+
+  .auth-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 32px 20px;
+    text-align: center;
+  }
+
+  .auth-section p {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .google-signin-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 24px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 24px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .google-signin-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .google-signin-btn svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+
+  .auth-user-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    margin-bottom: 16px;
+  }
+
+  .auth-user-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .auth-user-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .auth-user-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .auth-user-email {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sign-out-btn {
+    padding: 6px 14px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 8px;
+    color: rgba(239, 68, 68, 0.9);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .sign-out-btn:hover {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: rgba(239, 68, 68, 0.4);
+  }
 `;
 
+// Google "G" SVG logo
+const GOOGLE_G_SVG = `<svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59a14.5 14.5 0 0 1 0-9.18l-7.98-6.19a24.08 24.08 0 0 0 0 21.56l7.98-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>`;
+
 /**
- * Render settings page with user data
+ * Render the sign-in screen (when not authenticated)
  */
-export function renderSettings(
+export function renderSignIn(
   shadowRoot: ShadowRoot | null,
-  settings: UserSettings,
+  onSignIn: () => void,
+  errorMessage?: string,
 ): void {
   const settingsContent = shadowRoot?.getElementById("settings-content");
   if (!settingsContent) return;
 
+  const errorHtml = errorMessage
+    ? `<p style="color: rgba(239, 68, 68, 0.9); font-size: 12px; margin-top: 8px; padding: 8px 12px; background: rgba(239, 68, 68, 0.1); border-radius: 8px;">${errorMessage}</p>`
+    : "";
+
   settingsContent.innerHTML = `
+    <div class="auth-section">
+      <p>Sign in with your Google account to sync your preferences and let InterfaceAI personalise your experience.</p>
+      <button class="google-signin-btn" id="google-signin-btn">
+        ${GOOGLE_G_SVG}
+        Sign in with Google
+      </button>
+      ${errorHtml}
+    </div>
+  `;
+
+  const btn = shadowRoot?.getElementById("google-signin-btn");
+  btn?.addEventListener("click", onSignIn);
+}
+
+/**
+ * Render settings page with user data (authenticated)
+ */
+export function renderSettings(
+  shadowRoot: ShadowRoot | null,
+  settings: UserSettings,
+  authUser?: AuthUser | null,
+  onSignOut?: () => void,
+): void {
+  const settingsContent = shadowRoot?.getElementById("settings-content");
+  if (!settingsContent) return;
+
+  const avatarUrl = authUser?.picture || "";
+  const displayName = settings.name || authUser?.name || "";
+  const displayEmail = settings.email || authUser?.email || "";
+
+  const userBarHtml = authUser
+    ? `
+    <div class="auth-user-bar">
+      ${avatarUrl ? `<img class="auth-user-avatar" src="${avatarUrl}" alt="avatar" />` : `<div class="auth-user-avatar"></div>`}
+      <div class="auth-user-info">
+        <div class="auth-user-name">${displayName || "User"}</div>
+        <div class="auth-user-email">${displayEmail}</div>
+      </div>
+      <button class="sign-out-btn" id="sign-out-btn">Sign Out</button>
+    </div>
+  `
+    : "";
+
+  settingsContent.innerHTML = `
+    ${userBarHtml}
+
     <div class="settings-section">
       <h3>Personal Information</h3>
       <div class="settings-field" data-field="name">
@@ -279,6 +439,12 @@ export function renderSettings(
       </div>
     </div>
   `;
+
+  // Sign-out button
+  if (onSignOut) {
+    const signOutBtn = shadowRoot?.getElementById("sign-out-btn");
+    signOutBtn?.addEventListener("click", onSignOut);
+  }
 }
 
 /**
@@ -332,6 +498,75 @@ export function setupSettingsListeners(
       ];
       await onUpdate(currentSettings);
     }
+  });
+}
+
+export interface SignInResult {
+  user: AuthUser | null;
+  error?: string;
+}
+
+/**
+ * Request Google Sign-In via background script
+ */
+export async function requestGoogleSignIn(): Promise<SignInResult> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(
+      { type: "GOOGLE_SIGN_IN" },
+      (response: ApiResponse) => {
+        if (chrome.runtime.lastError) {
+          console.error("[Settings] Sign-in error:", chrome.runtime.lastError);
+          resolve({
+            user: null,
+            error: chrome.runtime.lastError.message || "Chrome runtime error",
+          });
+        } else if (response.success && response.data) {
+          resolve({ user: response.data as AuthUser });
+        } else {
+          console.error("[Settings] Sign-in failed:", response.error);
+          resolve({ user: null, error: response.error || "Sign-in failed" });
+        }
+      },
+    );
+  });
+}
+
+/**
+ * Request Google Sign-Out via background script
+ */
+export async function requestGoogleSignOut(): Promise<boolean> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(
+      { type: "GOOGLE_SIGN_OUT" },
+      (response: ApiResponse) => {
+        if (chrome.runtime.lastError) {
+          console.error("[Settings] Sign-out error:", chrome.runtime.lastError);
+          resolve(false);
+        } else {
+          resolve(response.success);
+        }
+      },
+    );
+  });
+}
+
+/**
+ * Get current auth state from background script
+ */
+export async function getAuthState(): Promise<AuthUser | null> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(
+      { type: "GET_AUTH_STATE" },
+      (response: ApiResponse) => {
+        if (chrome.runtime.lastError) {
+          resolve(null);
+        } else if (response.success && response.data) {
+          resolve(response.data as AuthUser);
+        } else {
+          resolve(null);
+        }
+      },
+    );
   });
 }
 
