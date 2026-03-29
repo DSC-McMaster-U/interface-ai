@@ -1,4 +1,5 @@
 import json
+import logging
 import threading
 from typing import Any, Callable
 
@@ -13,6 +14,7 @@ from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
 
+from app.db import get_profile
 from app.langgraph.utilities import (
     content_to_text,
     invoke_with_retry,
@@ -28,6 +30,8 @@ from app.continuous_learning import (
     normalize_agent_memory_entries,
     normalize_user_memory_entries,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def run_architecture_1(
@@ -503,6 +507,19 @@ def run_architecture_1(
     agent = create_react_agent(model=model, tools=tools)
 
     initial_status = tracked_send("getPageStatus", {})
+    user_profile_context = ""
+    if user_id:
+        try:
+            profile = get_profile(user_id)
+            prefs = profile.get("preferences", {})
+            if prefs:
+                user_profile_context = (
+                    "\n\nYou have access to the following user profile information. "
+                    "Use it to personalise actions and to fill forms consistently when appropriate. "
+                    f"User profile: {json.dumps(prefs, ensure_ascii=False)}"
+                )
+        except Exception as exc:
+            logger.warning("Could not load user profile for %s: %s", user_id, exc)
     context = json.dumps(initial_status)[:6000]
     latest_status = initial_status
     emit(f"Memory backend: {memory_store.backend_name()}")
@@ -552,6 +569,7 @@ def run_architecture_1(
                 "Example: for 'play minecraft vid', do not ask what site to use; just choose a reasonable place like YouTube and proceed. "
                 "Example: for a job application, if the form requires personal details like legal name, phone number, or a specific internship choice that is not clearly determined, ask a single precise question with requestUserInput. "
                 "Example: for 'open this Wikipedia page and summarize it', navigate there, call getWebsiteContent, then provide the summary based on the extracted text. "
+                + user_profile_context
             )
         ),
         HumanMessage(content=f"Goal: {goal}"),

@@ -2,7 +2,12 @@
  * UI interaction handlers (messages, loading, input)
  */
 
-import type { ApiRequestMessage, ApiResponse, ChatApiResponse } from "./types";
+import type {
+  ApiRequestMessage,
+  ApiResponse,
+  AuthUser,
+  ChatApiResponse,
+} from "./types";
 import { parseCommand, summarizeResult } from "./command-parser";
 import {
   executeAction,
@@ -943,6 +948,7 @@ export function setupInput(
 
     try {
       const BACKEND_API = "http://localhost:5000";
+      const userId = await getSignedInUserId();
       const isStreamingGoal =
         message.toUpperCase().startsWith("GOAL:") &&
         Boolean(message.split(":", 2)[1]?.trim());
@@ -951,7 +957,7 @@ export function setupInput(
         const once = await fetch(`${BACKEND_API}/api/relay_once`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message }),
+          body: JSON.stringify({ message, user_id: userId }),
         });
 
         if (!once.ok) {
@@ -974,7 +980,7 @@ export function setupInput(
       // Streaming for GOAL: messages
       const url = `${BACKEND_API}/api/relay`;
       const response = await fetch(
-        `${url}?message=${encodeURIComponent(message)}`,
+        `${url}?message=${encodeURIComponent(message)}&user_id=${encodeURIComponent(userId)}`,
       );
 
       if (!response.ok) {
@@ -1090,6 +1096,19 @@ function consumeSseEvents(buffer: string): {
   }
 
   return { events, remainder };
+}
+
+async function getSignedInUserId(): Promise<string> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: "GET_AUTH_STATE" }, (response: ApiResponse) => {
+      if (chrome.runtime.lastError) {
+        resolve("");
+        return;
+      }
+      const user = (response?.success ? response.data : null) as AuthUser | null;
+      resolve(user?.userId || "");
+    });
+  });
 }
 
 // -------------------- BUTTONS --------------------

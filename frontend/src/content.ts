@@ -11,6 +11,7 @@ const overlay = new InterfaceAIOverlay();
 
 let ws: WebSocket | null = null;
 let reconnectDelayMs = 2000;
+let wsEnabled = false;
 
 function sendWsMessage(payload: Record<string, unknown>): void {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
@@ -55,6 +56,7 @@ async function handleWsMessage(raw: string): Promise<void> {
 }
 
 function connectAgentWebSocket(): void {
+  if (!wsEnabled || ws) return;
   try {
     ws = new WebSocket("ws://localhost:7878");
 
@@ -73,6 +75,7 @@ function connectAgentWebSocket(): void {
 
     ws.onclose = () => {
       ws = null;
+      if (!wsEnabled) return;
       window.setTimeout(connectAgentWebSocket, reconnectDelayMs);
       reconnectDelayMs = Math.min(reconnectDelayMs * 2, 10000);
     };
@@ -86,9 +89,41 @@ function connectAgentWebSocket(): void {
   }
 }
 
-connectAgentWebSocket();
+function closeAgentWebSocket(): void {
+  if (!ws) return;
+  try {
+    ws.onclose = null;
+    ws.close();
+  } catch {
+    // ignore close errors
+  }
+  ws = null;
+}
+
+function setAgentWsEnabled(enabled: boolean): void {
+  wsEnabled = enabled;
+  if (enabled) {
+    connectAgentWebSocket();
+  } else {
+    closeAgentWebSocket();
+  }
+}
+
+chrome.runtime.sendMessage({ type: "GET_AGENT_WS_STATE" }, (response) => {
+  const enabled = Boolean(
+    response?.success &&
+      (response.data as { enabled?: boolean } | undefined)?.enabled,
+  );
+  setAgentWsEnabled(enabled);
+});
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type === "AGENT_WS_STATE") {
+    setAgentWsEnabled(Boolean(message.enabled));
+    sendResponse({ success: true });
+    return true;
+  }
+
   if (message.type === "TOGGLE_OVERLAY") {
     overlay.toggle();
     sendResponse({ success: true });
