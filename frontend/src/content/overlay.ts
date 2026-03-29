@@ -72,7 +72,6 @@ export class InterfaceAIOverlay {
 
   private init(): void {
     if (document.getElementById("interface-ai-root")) {
-      console.log("[InterfaceAI] Overlay already exists, skipping injection");
       return;
     }
 
@@ -95,8 +94,6 @@ export class InterfaceAIOverlay {
     this.container = this.shadowRoot.getElementById("interface-ai-main");
     this.setupEventListeners();
     this.restoreState();
-
-    console.log("[InterfaceAI] Overlay injected successfully");
   }
 
   private setupEventListeners(): void {
