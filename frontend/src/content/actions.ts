@@ -1,6 +1,6 @@
 /**
  * Action Execution Functions
- * Browser-native action helpers for Chrome extension content scripts.
+ * Browser-native equivalents of automation.js actions, adapted for Chrome extension content scripts.
  * These run directly in the page context (no Puppeteer needed).
  */
 
@@ -54,35 +54,6 @@ export function clickByName(name: string, exactMatch = false): ActionResult {
     }
   }
   return { success: false, error: `No element found matching: "${name}"` };
-}
-
-export function goto(url: string): ActionResult {
-  const target = (url || "").trim();
-  if (!target) {
-    return { success: false, error: "Missing URL" };
-  }
-  try {
-    const normalized = /^https?:\/\//i.test(target)
-      ? target
-      : `https://${target}`;
-    window.location.href = normalized;
-    return { success: true, url: normalized };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Invalid URL",
-    };
-  }
-}
-
-export function goBack(): ActionResult {
-  window.history.back();
-  return { success: true };
-}
-
-export function goForward(): ActionResult {
-  window.history.forward();
-  return { success: true };
 }
 
 export function scrollUp(pixels = 500): ActionResult {
@@ -146,13 +117,6 @@ export function fillInput(identifier: string, value: string): ActionResult {
   }
 
   if (input) {
-    if ((input as HTMLInputElement).type?.toLowerCase() === "file") {
-      return {
-        success: false,
-        error:
-          "Target input is a file input. Use clickFileInput(identifier) and let user choose the file.",
-      };
-    }
     input.focus();
     input.value = value;
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -210,29 +174,6 @@ export function pressEnter(): ActionResult {
     );
   }
   return { success: true };
-}
-
-export function pressKey(key: string): ActionResult {
-  const k = (key || "").trim();
-  if (!k) return { success: false, error: "Missing key" };
-
-  const active = document.activeElement as HTMLElement | null;
-  const target = active || document.body;
-  target.dispatchEvent(
-    new KeyboardEvent("keydown", {
-      key: k,
-      bubbles: true,
-      cancelable: true,
-    }),
-  );
-  target.dispatchEvent(
-    new KeyboardEvent("keyup", {
-      key: k,
-      bubbles: true,
-      cancelable: true,
-    }),
-  );
-  return { success: true, key: k };
 }
 
 export function pressEnterOn(identifier: string): ActionResult {
@@ -315,6 +256,48 @@ export function typeText(text: string): ActionResult {
     return { success: true };
   }
   return { success: false, error: "No active input element to type into" };
+}
+
+export function goto(url: string): ActionResult {
+  const target = (url || "").trim();
+  if (!target) return { success: false, error: "Missing URL" };
+  try {
+    const normalized = /^https?:\/\//i.test(target)
+      ? target
+      : `https://${target}`;
+    window.location.href = normalized;
+    return { success: true, url: normalized };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Invalid URL",
+    };
+  }
+}
+
+export function goBack(): ActionResult {
+  window.history.back();
+  return { success: true };
+}
+
+export function goForward(): ActionResult {
+  window.history.forward();
+  return { success: true };
+}
+
+export function pressKey(key: string): ActionResult {
+  const k = (key || "").trim();
+  if (!k) return { success: false, error: "Missing key" };
+
+  const active = document.activeElement as HTMLElement | null;
+  const target = active || document.body;
+  target.dispatchEvent(
+    new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }),
+  );
+  target.dispatchEvent(
+    new KeyboardEvent("keyup", { key: k, bubbles: true, cancelable: true }),
+  );
+  return { success: true, key: k };
 }
 
 export function selectOption(identifier: string, value: string): ActionResult {
@@ -426,37 +409,219 @@ export function clickFileInput(identifier: string): ActionResult {
   return { success: true, name: input.name || input.id || "file input" };
 }
 
+function resolveFileInput(identifier: string): HTMLInputElement | null {
+  const lower = identifier.toLowerCase();
+
+  let input: HTMLInputElement | null =
+    document.querySelector<HTMLInputElement>(
+      `input[type="file"][name="${identifier}" i]`,
+    ) ||
+    document.querySelector<HTMLInputElement>(
+      `input[type="file"]#${CSS.escape(identifier)}`,
+    ) ||
+    document.querySelector<HTMLInputElement>(
+      `input[type="file"][aria-label*="${identifier}" i]`,
+    );
+
+  if (!input) {
+    for (const label of document.querySelectorAll("label")) {
+      if (label.textContent?.toLowerCase().includes(lower)) {
+        const forAttr = label.getAttribute("for");
+        const candidate = forAttr
+          ? (document.getElementById(forAttr) as HTMLInputElement | null)
+          : label.querySelector<HTMLInputElement>('input[type="file"]');
+        if (candidate?.type === "file") {
+          input = candidate;
+          break;
+        }
+      }
+    }
+  }
+
+  return (
+    input ?? document.querySelector<HTMLInputElement>('input[type="file"]')
+  );
+}
+
+/**
+ * Upload a file to a file input by fetching it from a path or URL.
+ *
+ * - filePath: a local file path (e.g. C:\Users\...\doc.pdf or /home/.../doc.pdf)
+ *   or an http/https URL. Local paths are converted to file:// URLs — this
+ *   requires the extension to have file:// access enabled in browser settings.
+ * - keyword: if provided (and no filePath), searches the current page for
+ *   clickable elements whose visible text contains the keyword (useful in
+ *   web-based file managers like Google Drive, OneDrive, etc.) and clicks the
+ *   first match to select/navigate to that file before attaching it.
+ */
+export async function uploadFile(
+  identifier: string,
+  filePath?: string,
+  keyword?: string,
+): Promise<ActionResult> {
+  const input = resolveFileInput(identifier);
+  if (!input) {
+    return {
+      success: false,
+      error: `No file input found matching: "${identifier}"`,
+    };
+  }
+
+  // Keyword / filename search
+  if (keyword && !filePath) {
+    // If the keyword looks like a filename (has a file extension), search the
+    // local filesystem via the background service worker first.
+    if (/\.\w{2,5}$/.test(keyword)) {
+      const bgResponse = await new Promise<{
+        success: boolean;
+        data?: string;
+        error?: string;
+      }>((resolve) =>
+        chrome.runtime.sendMessage(
+          { type: "FIND_AND_FETCH_FILE", fileName: keyword },
+          resolve,
+        ),
+      );
+      if (bgResponse?.success && bgResponse.data) {
+        const fetchedBlob = await fetch(bgResponse.data).then((r) => r.blob());
+        const file = new File([fetchedBlob], keyword, {
+          type: fetchedBlob.type || "application/octet-stream",
+          lastModified: Date.now(),
+        });
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        return {
+          success: true,
+          fileName: keyword,
+          size: file.size,
+          type: file.type,
+          inputName: input.name || input.id || "file input",
+        };
+      }
+      return {
+        success: false,
+        error: bgResponse?.error ?? `"${keyword}" not found on filesystem`,
+      };
+    }
+
+    // Otherwise: search the current page's DOM for a matching element
+    // (useful in web-based file managers like Google Drive, OneDrive, etc.)
+    const kw = keyword.toLowerCase();
+    const candidates = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        'a, [role="row"], [role="listitem"], li, tr, [role="option"]',
+      ),
+    );
+    const match = candidates.find((el) =>
+      el.textContent?.toLowerCase().includes(kw),
+    );
+    if (match) {
+      match.click();
+      return {
+        success: true,
+        action: "keyword-click",
+        keyword,
+        element: match.tagName,
+        text: match.textContent?.trim().substring(0, 80),
+      };
+    }
+    return {
+      success: false,
+      error: `No page element found containing: "${keyword}"`,
+    };
+  }
+
+  if (!filePath) {
+    return { success: false, error: "Provide filePath or keyword" };
+  }
+
+  // Build a fetchable URL from the path
+  let fileUrl: string;
+  if (/^https?:\/\//i.test(filePath)) {
+    fileUrl = filePath;
+  } else {
+    const normalized = filePath.replace(/\\/g, "/");
+    fileUrl = normalized.startsWith("/")
+      ? `file://${normalized}`
+      : `file:///${normalized}`;
+  }
+
+  const fileName = filePath.split(/[/\\]/).pop() || "upload";
+
+  // For file:// URLs, route through the background service worker because
+  // content scripts cannot fetch file:// URLs directly (browser security policy).
+  const fetchViaBackground = fileUrl.startsWith("file://");
+
+  try {
+    let dataUrl: string;
+
+    if (fetchViaBackground) {
+      const response = await new Promise<{
+        success: boolean;
+        data?: string;
+        error?: string;
+      }>((resolve) =>
+        chrome.runtime.sendMessage({ type: "FETCH_FILE", fileUrl }, resolve),
+      );
+      if (!response?.success || !response.data) {
+        throw new Error(response?.error ?? "Background fetch failed");
+      }
+      dataUrl = response.data;
+    } else {
+      const r = await fetch(fileUrl);
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+      const blob = await r.blob();
+      dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error("FileReader failed"));
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    // Convert data URL → Blob → File and attach to the input
+    const fetchedBlob = await fetch(dataUrl).then((r) => r.blob());
+    const file = new File([fetchedBlob], fileName, {
+      type: fetchedBlob.type || "application/octet-stream",
+      lastModified: Date.now(),
+    });
+
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+
+    return {
+      success: true,
+      fileName,
+      size: file.size,
+      type: file.type,
+      inputName: input.name || input.id || "file input",
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: `Could not load "${filePath}": ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
 // -------------------- PAGE STATUS --------------------
 
 export interface PageStatus {
-  success: boolean;
+  success?: boolean;
   title: string;
   url: string;
   scroll: { position: number; maxScroll: number; percent: number };
   headings: { level: string; text: string }[];
-  buttons: {
-    id: string | null;
-    name: string | null;
-    text: string;
-    ariaLabel: string | null;
-    disabled: boolean;
-    type?: string;
-  }[];
-  textboxes: {
-    id: string | null;
-    name: string;
-    type: string;
-    value: string;
-    placeholder?: string;
-    ariaLabel?: string | null;
-  }[];
-  inputs: {
-    id: string | null;
-    name: string;
-    type: string;
-    placeholder?: string | null;
-    ariaLabel?: string | null;
-  }[];
+  buttons: { text: string; disabled: boolean }[];
+  textboxes: { name: string; type: string; value: string }[];
+  links: { text: string; href: string }[];
+  images: { alt: string; src: string }[];
   searchBoxes: {
     id: string | null;
     name: string;
@@ -484,45 +649,22 @@ export interface PageStatus {
     accept: string | null;
     multiple: boolean;
   }[];
-  sliders: {
-    id: string | null;
-    name: string;
-    min: number;
-    max: number;
-    value: number;
-  }[];
-  checkboxes: {
-    id: string | null;
-    name: string;
-    checked: boolean;
-    label: string | null;
-  }[];
-  forms: { id: string | null; action: string | null }[];
-  landmarks: { type: string; text: string }[];
-  iframes: { src: string }[];
-  links: { text: string; href: string }[];
-  images: { alt: string; src: string }[];
-  paragraphs: string[];
 }
 
 export function getPageStatus(): PageStatus {
   const isVisible = (el: Element): boolean => {
     const htmlEl = el as HTMLElement;
-    if (!htmlEl || !htmlEl.getBoundingClientRect) return false;
+    if (!htmlEl?.getBoundingClientRect) return false;
     const style = window.getComputedStyle(htmlEl);
     if (
       style.display === "none" ||
       style.visibility === "hidden" ||
       style.opacity === "0"
-    ) {
+    )
       return false;
-    }
     const rect = htmlEl.getBoundingClientRect();
     return rect.width > 0 && rect.height > 0;
   };
-
-  const trim = (s: string | null | undefined, n: number): string =>
-    (s || "").trim().substring(0, n);
 
   const inputs = Array.from(
     document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
@@ -545,11 +687,10 @@ export function getPageStatus(): PageStatus {
       /search/i.test(i.name) ||
       /search/i.test(i.placeholder || ""),
   );
-  const fillableFields = inputs.filter(
-    (i) =>
-      ["text", "search", "email", "password", "url", "tel", "number"].includes(
-        i.type.toLowerCase(),
-      ) || i.type.toLowerCase() === "textarea",
+  const fillableFields = inputs.filter((i) =>
+    ["text", "search", "email", "password", "url", "tel", "number"].includes(
+      i.type.toLowerCase(),
+    ),
   );
   const selects = Array.from(
     document.querySelectorAll<HTMLSelectElement>("select"),
@@ -609,38 +750,26 @@ export function getPageStatus(): PageStatus {
       .filter((b) => isVisible(b))
       .slice(0, 30)
       .map((b) => ({
-        id: b.id || null,
-        name: b.getAttribute("name"),
         text: (
           b.textContent?.trim() ||
           b.value ||
           b.getAttribute("aria-label") ||
           ""
         ).substring(0, 50),
-        ariaLabel: b.getAttribute("aria-label"),
         disabled: b.disabled,
-        type: b.type || "button",
       })),
     textboxes: Array.from(
-      document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+      document.querySelectorAll<HTMLInputElement>(
         'input:not([type="hidden"]), textarea',
       ),
     )
       .filter((i) => isVisible(i))
       .slice(0, 20)
       .map((i) => ({
-        id: i.id || null,
         name: i.name || i.id || i.placeholder || "unnamed",
         type: i.type || "text",
         value: i.type === "password" ? "***" : (i.value || "").substring(0, 50),
-        placeholder: i.placeholder?.substring(0, 60),
-        ariaLabel: i.getAttribute("aria-label"),
       })),
-    inputs,
-    searchBoxes,
-    fillableFields,
-    selects,
-    fileInputs,
     links: Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href]"))
       .filter((a) => isVisible(a))
       .slice(0, 30)
@@ -649,77 +778,70 @@ export function getPageStatus(): PageStatus {
         href: a.href.substring(0, 100),
       })),
     images: Array.from(document.querySelectorAll<HTMLImageElement>("img[src]"))
-      .filter((i) => isVisible(i))
       .slice(0, 20)
       .map((i) => ({
         alt: (i.alt || "").substring(0, 50),
         src: i.src.substring(0, 100),
       })),
-    paragraphs: Array.from(document.querySelectorAll("p"))
-      .filter((p) => isVisible(p))
-      .slice(0, 20)
-      .map((p) => (p.textContent || "").trim().substring(0, 150))
-      .filter(Boolean),
-    sliders: Array.from(
-      document.querySelectorAll<HTMLInputElement>('input[type="range"]'),
+    searchBoxes,
+    fillableFields,
+    selects,
+    fileInputs,
+  };
+}
+
+// -------------------- WEBSITE CONTENT --------------------
+
+export interface WebsiteContent {
+  title: string;
+  url: string;
+  /** Extracted readable paragraphs/headings, noise-filtered */
+  paragraphs: string[];
+  /** Full text joined with newlines, capped at 50 000 chars */
+  fullText: string;
+}
+
+/**
+ * Scrape the readable text content of the current page.
+ * Strips navigation, footers, scripts, ads, etc. and returns the main prose.
+ */
+export function getWebsiteContent(): WebsiteContent {
+  // Clone body so we can strip noise without touching the live DOM
+  const clone = document.body.cloneNode(true) as HTMLElement;
+  clone
+    .querySelectorAll(
+      "script, style, noscript, nav, header, footer, aside, " +
+        '[role="navigation"], [role="banner"], [role="contentinfo"], ' +
+        '[role="complementary"], form, .ad, .ads, .advertisement, ' +
+        ".sidebar, .menu, .navbar, .nav, .footer, .header",
     )
-      .filter((r) => isVisible(r))
-      .slice(0, 15)
-      .map((r) => ({
-        id: r.id || null,
-        name: r.name || r.id || "unnamed",
-        min: parseFloat(r.min) || 0,
-        max: parseFloat(r.max) || 100,
-        value: parseFloat(r.value) || 0,
-      })),
-    checkboxes: Array.from(
-      document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
-    )
-      .filter((c) => isVisible(c))
-      .slice(0, 25)
-      .map((c) => {
-        let label: string | null = null;
-        if (c.id) {
-          const forLabel = document.querySelector(
-            `label[for="${c.id.replace(/"/g, '\\"')}"]`,
-          );
-          if (forLabel) label = trim(forLabel.textContent, 80) || null;
-        }
-        if (!label && c.parentElement?.tagName === "LABEL") {
-          label = trim(c.parentElement.textContent, 80) || null;
-        }
-        return {
-          id: c.id || null,
-          name: c.name || c.id || "unnamed",
-          checked: !!c.checked,
-          label,
-        };
-      }),
-    forms: Array.from(document.querySelectorAll<HTMLFormElement>("form"))
-      .filter((f) => isVisible(f))
-      .slice(0, 10)
-      .map((f) => ({
-        id: f.id || null,
-        action: f.action ? f.action.substring(0, 140) : null,
-      })),
-    landmarks: Array.from(
-      document.querySelectorAll<HTMLElement>(
-        'nav, [role="navigation"], main, [role="main"], aside, [role="complementary"], header, footer',
-      ),
-    )
-      .filter((el) => isVisible(el))
-      .slice(0, 15)
-      .map((el) => ({
-        type: el.getAttribute("role") || el.tagName.toLowerCase(),
-        text: trim(el.textContent, 80),
-      })),
-    iframes: Array.from(
-      document.querySelectorAll<HTMLIFrameElement>("iframe[src]"),
-    )
-      .slice(0, 8)
-      .map((f) => ({
-        src: f.src.substring(0, 140),
-      })),
+    .forEach((el) => el.remove());
+
+  // Prefer a semantic content container
+  const root =
+    clone.querySelector("article") ??
+    clone.querySelector("main") ??
+    clone.querySelector('[role="main"]') ??
+    clone;
+
+  const seen = new Set<string>();
+  const paragraphs: string[] = [];
+
+  root
+    .querySelectorAll("p, h1, h2, h3, h4, h5, h6, li, blockquote, figcaption")
+    .forEach((el) => {
+      const text = el.textContent?.replace(/\s+/g, " ").trim();
+      if (text && text.length > 20 && !seen.has(text)) {
+        seen.add(text);
+        paragraphs.push(text);
+      }
+    });
+
+  return {
+    title: document.title,
+    url: window.location.href,
+    paragraphs: paragraphs.slice(0, 200),
+    fullText: paragraphs.slice(0, 200).join("\n\n").substring(0, 50_000),
   };
 }
 
@@ -744,9 +866,21 @@ export type ActionType =
   | { type: "selectOption"; identifier: string; value: string }
   | { type: "clickFileInput"; identifier: string }
   | { type: "ping" }
-  | { type: "getPageStatus" };
+  | {
+      type: "uploadFile";
+      /** Label/name/id of the file input element */
+      identifier: string;
+      /** Full local file path (e.g. C:\docs\cv.pdf) or http/https URL */
+      filePath?: string;
+      /** Keyword to search for in the page when a full path is unavailable */
+      keyword?: string;
+    }
+  | { type: "getPageStatus" }
+  | { type: "getWebsiteContent" };
 
-export function executeAction(action: ActionType): ActionResult | PageStatus {
+export async function executeAction(
+  action: ActionType,
+): Promise<ActionResult | PageStatus | WebsiteContent> {
   switch (action.type) {
     case "clickAtCoordinate":
       return clickAtCoordinate(action.x, action.y);
@@ -784,8 +918,12 @@ export function executeAction(action: ActionType): ActionResult | PageStatus {
       return clickFileInput(action.identifier);
     case "ping":
       return { success: true, pong: true };
+    case "uploadFile":
+      return uploadFile(action.identifier, action.filePath, action.keyword);
     case "getPageStatus":
       return getPageStatus();
+    case "getWebsiteContent":
+      return getWebsiteContent();
     default:
       return { success: false, error: "Unknown action type" };
   }
@@ -829,8 +967,15 @@ export function describeAction(action: ActionType): string {
       return `Open file picker for "${action.identifier}"`;
     case "ping":
       return "Ping";
+    case "uploadFile":
+      if (action.keyword) {
+        return `Search page for "${action.keyword}" and select file for "${action.identifier}"`;
+      }
+      return `Upload "${action.filePath ?? "file"}" to "${action.identifier}"`;
     case "getPageStatus":
       return "Get page status";
+    case "getWebsiteContent":
+      return "Get website text content";
     default:
       return "Execute action";
   }

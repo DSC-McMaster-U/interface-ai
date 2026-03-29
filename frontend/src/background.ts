@@ -456,6 +456,46 @@ chrome.runtime.onMessage.addListener(
       return true;
     }
 
+    if (message.type === "FIND_AND_FETCH_FILE") {
+      const { fileName } = message as { type: string; fileName: string };
+      findAndFetchFile(fileName)
+        .then(sendResponse)
+        .catch((error: unknown) =>
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : "Search failed",
+          }),
+        );
+      return true;
+    }
+
+    if (message.type === "FETCH_FILE") {
+      const { fileUrl } = message as { type: string; fileUrl: string };
+      fetch(fileUrl)
+        .then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+          return r.blob();
+        })
+        .then(
+          (blob) =>
+            new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = () => reject(new Error("FileReader failed"));
+              reader.readAsDataURL(blob);
+            }),
+        )
+        .then((dataUrl) => sendResponse({ success: true, data: dataUrl }))
+        .catch((error) =>
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : "Fetch failed",
+          }),
+        );
+
+      return true;
+    }
+
     if (message.type === "TAKE_SCREENSHOT") {
       chrome.tabs
         .captureVisibleTab({ format: "png" })
