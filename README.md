@@ -34,7 +34,7 @@ By combining intent recognition, vision-based action execution, and contextual a
 | Photo | Contributor | Role & Tools | Notable Contributions |
 |:--:|:--|:--|:--|
 | <img width="120" height="120" src="https://github.com/user-attachments/assets/f594f377-a326-49cd-9e18-c9caa5df4b59" alt="Sachin Gupta" /> | [**Sachin Gupta**](https://github.com/SachinVedGupta) <br/><i>Project Lead</i> | Python · PyTorch · GCP | Ideation |
-| <img width="120" height="120" src="./assets/contributors/adrian-najmi.jpg" alt="Adrian Najmi" /> | [**Adrian Najmi**](https://github.com/adriancoder06) <br/><i>Open Source Dev</i> | Python · JavaScript · Puppeteer · TypeScript · Chrome Extension APIs | Action Execution |
+| <img width="120" height="120" src="./assets/contributors/adrian-najmi.jpg" alt="Adrian Najmi" /> | [**Adrian Najmi**](https://github.com/adriancoder06) <br/><i>Open Source Dev</i> | Python · JavaScript · TypeScript · Chrome Extension APIs | Action Execution |
 |  | [**Hassan Ibrahim**](https://github.com/Hassan-Ibrahim-1) <br/><i>Backend</i> | Python · Flask | Database Design |
 |  | [**Luna Aljammal**](https://github.com/luna-aljammal) <br/><i>Backend + DB</i> | Python · Flask · Redis · GCP | Database Integration |
 |  | [**Andrew Wu**](https://github.com/andrewwu13) <br/><i>Frontend</i> | JavaScript | UI & Frontend Development |
