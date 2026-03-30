@@ -37,7 +37,7 @@ By combining intent recognition, vision-based action execution, and contextual a
 |  | [**Adrian Najmi**](https://github.com/adriancoder06) <br/><i>AI</i> | Python · PyTorch · Playwright · Tesseract OCR | Ideation |
 |  | [**Hassan Ibrahim**](https://github.com/Hassan-Ibrahim-1) <br/><i>Backend</i> | Python · Flask | Database Design |
 |  | [**Luna Aljammal**](https://github.com/luna-aljammal) <br/><i>Backend + DB</i> | Python · Flask · Redis · GCP | Database Integration |
-|  | [**Andrew Wu**](https://github.com/andrewwu13) <br/><i>Frontend</i> | JavaScript | UI & Frontend Development |
+| <img width="120" height="120" src="https://github.com/user-attachments/assets/ca8c625c-dcfb-46a3-869e-6618afd8ae08" alt="Andrew Wu" /> | [**Andrew Wu**](https://github.com/andrewwu13) <br/><i>Frontend</i> | JavaScript | UI & Frontend Development |
 |  | [**Mohit Gedela**](https://github.com/MohitGedela) <br/><i>Vision AI</i> | Python · Java · JavaScript | Vision AI Development |
 |  | [**Alex Melnbardis**](https://github.com/amelnbardis2004) <br/><i>AI</i> | Python · PyTorch · Playwright · LangGraph | AI Agents + Vision AI |
 |  | [**David Olejniczak**](https://github.com/davidolejniczak) <br/><i>CI/CD + Cloud</i> | CGP · Docker · Github Actions | CI/CD |
