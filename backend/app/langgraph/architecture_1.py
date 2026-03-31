@@ -289,7 +289,7 @@ def run_architecture_1(
 
     @tool
     def goto(url: str) -> dict[str, Any]:
-        """Navigate current tab to url. Do NOT use this tool if the user wants to `search` for something. If the goal involves searching, use the search bar on the current page instead of navigating directly to the search engine URL."""
+        """Navigate current tab to url. NEVER include search parameters or paths for search engines/video sites (e.g. NEVER use youtube.com/results?search_query=x). Always use the base homepage url (e.g. https://www.youtube.com or https://www.google.com), and THEN use fillInput to visually interact with the search bar."""
         return tracked_send("goto", {"url": url})
 
     def _run_vision_fallback(query: str, action: str, fallback_value: str = "") -> dict[str, Any]:
@@ -311,7 +311,7 @@ def run_architecture_1(
         emit(f"Vision AI ({vision_mode} mode) activating for '{query}'...")
         shot = approved_send("takeScreenshot", {})
         if not shot.get("success") or not shot.get("data"):
-            return {"success": False, "error": f"Vision AI failed: Could not capture screenshot."}
+            return {"success": False, "error": f"Vision AI failed: Could not capture screenshot. {shot.get('error', '')}"}
         
         img_data = shot["data"]
         url = os.getenv("VISION_AI_URL", "http://vision-ai:6000")
@@ -344,7 +344,7 @@ def run_architecture_1(
 
     @tool
     def clickByName(name: str, exactMatch: bool = False) -> dict[str, Any]:
-        """Click element by visible text."""
+        """Click element by visible text. Useful for clicking links, buttons, video titles, or any visible text. Uses fuzzy matching (substring) by default."""
         from app.agent_execution import session
         vision_mode = getattr(session, "get_vision_mode", lambda: "FALLBACK")()
         
@@ -357,18 +357,24 @@ def run_architecture_1(
         return res
 
     @tool
-    def fillInput(identifier: str, value: str) -> dict[str, Any]:
-        """Fill input field by identifier with value."""
+    def fillInput(identifier: str, value: str, press_enter: bool = False) -> dict[str, Any]:
+        """Fill input field by identifier with value. Set press_enter to True to simulate pressing the Enter key immediately after typing (useful for search bars)."""
         from app.agent_execution import session
         vision_mode = getattr(session, "get_vision_mode", lambda: "FALLBACK")()
-        
+
         if vision_mode == "FORCE":
-            return _run_vision_fallback(identifier, "fillInput", fallback_value=value)
+            res = _run_vision_fallback(identifier, "fillInput", fallback_value=value)
+            if res.get("success") and press_enter:
+                tracked_send("pressEnter", {})
+            return res
 
         res = tracked_send("fillInput", {"identifier": identifier, "value": value})
         if not res.get("success") and vision_mode == "FALLBACK":
-            return _run_vision_fallback(identifier, "fillInput", fallback_value=value)
-        return res
+            res = _run_vision_fallback(identifier, "fillInput", fallback_value=value)
+        
+        if res.get("success") and press_enter:
+            tracked_send("pressEnter", {})
+            
 
     @tool
     def pressEnter() -> dict[str, Any]:
@@ -426,9 +432,12 @@ def run_architecture_1(
         return tracked_send("pressEnterOn", {"identifier": identifier})
 
     @tool
-    def typeText(text: str) -> dict[str, Any]:
-        """Type text into active element."""
-        return tracked_send("typeText", {"text": text})
+    def typeText(text: str, press_enter: bool = False) -> dict[str, Any]:
+        """Type text into active element. Set press_enter to True to simulate pressing the Enter key immediately after typing."""
+        res = tracked_send("typeText", {"text": text})
+        if res.get("success") and press_enter:
+            tracked_send("pressEnter", {})
+        return res
 
     @tool
     def selectOption(identifier: str, value: str) -> dict[str, Any]:

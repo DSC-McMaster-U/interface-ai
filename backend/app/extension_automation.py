@@ -14,8 +14,8 @@ _cmd_id = 0
 _loop: asyncio.AbstractEventLoop | None = None
 _log_queue: 'asyncio.Queue[dict[str, Any]] | None' = None
 
-RECONNECT_WAIT_SECONDS = 12.0
-COMMAND_TIMEOUT_SECONDS = 8.0
+RECONNECT_WAIT_SECONDS = 25.0
+COMMAND_TIMEOUT_SECONDS = 30.0
 
 
 async def _wait_for_connection(timeout_seconds: float = RECONNECT_WAIT_SECONDS) -> bool:
@@ -50,6 +50,13 @@ async def _handle_client(websocket):
     finally:
         _connected = None
         print("[ExtensionAutomation] Browser disconnected")
+        
+        # When browser disconnects (often due to navigation from a click or goto), 
+        # resolve pending commands as success to avoid halting the agent loop.
+        for rid, future in list(_pending.items()):
+            if not future.done():
+                future.set_result({"success": True, "message": "Browser disconnected (navigation triggered)"})
+        _pending.clear()
 
 
 async def _log_worker():
@@ -131,7 +138,7 @@ def send_command_sync(
 
     task = asyncio.run_coroutine_threadsafe(_send_command(action, params), _loop)
     try:
-        return task.result(timeout=20)
+        return task.result(timeout=40)
     except Exception as exc:
         return {"success": False, "error": str(exc)}
 

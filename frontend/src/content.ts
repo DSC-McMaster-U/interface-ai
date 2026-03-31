@@ -89,6 +89,13 @@ function connectAgentWebSocket(): void {
   }
 }
 
+window.addEventListener("pagehide", () => {
+  if (ws) {
+    ws.close();
+    ws = null;
+  }
+});
+
 function closeAgentWebSocket(): void {
   if (!ws) return;
   try {

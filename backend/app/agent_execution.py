@@ -390,12 +390,10 @@ class AgentSession:
         if (
             error_text == "WebSocket server not running"
             or "No browser connected" in error_text
-            or "command timeout" in error_text.lower()
         ):
             self._emit(
-                "Browser extension is not responding. Reload the extension tab and retry. Agent stopped."
+                "Browser extension has disconnected tracking. Please check if the tab was closed."
             )
-            self.stop()
         return result
 
     def _run(self) -> None:

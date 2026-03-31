@@ -209,10 +209,19 @@ export function clickAtCoordinate(x: number, y: number): ActionResult {
 }
 
 export function clickByName(name: string, exactMatch = false): ActionResult {
+  const isMatch = (text: string) =>
+    exactMatch
+      ? text.toLowerCase() === name.toLowerCase()
+      : text.toLowerCase().includes(name.toLowerCase());
+
+  // 1. Check interactive text elements first
   const selectors = [
     "button",
     "a",
     '[role="button"]',
+    '[role="link"]',
+    '[role="menuitem"]',
+    '[role="option"]',
     'input[type="button"]',
     'input[type="submit"]',
   ];
@@ -223,16 +232,38 @@ export function clickByName(name: string, exactMatch = false): ActionResult {
         el.textContent?.trim() ||
         inputEl.value ||
         el.getAttribute("aria-label") ||
+        el.title ||
         "";
-      const matches = exactMatch
-        ? text.toLowerCase() === name.toLowerCase()
-        : text.toLowerCase().includes(name.toLowerCase());
-      if (matches) {
+      if (text && isMatch(text)) {
         el.click();
         return { success: true, element: el.tagName, text };
       }
     }
   }
+
+  // 2. Fallback: Check general text nodes for fuzzy finding elements that aren't natively tagged well
+  const treeWalker = document.createTreeWalker(
+    document.body,
+    NodeFilter.SHOW_TEXT,
+    null,
+  );
+  let currentNode: Node | null;
+  while ((currentNode = treeWalker.nextNode())) {
+    if (currentNode.nodeValue && isMatch(currentNode.nodeValue.trim())) {
+      const target = currentNode.parentElement;
+      if (target) {
+        // Try to find if it has an interactive wrapper we should trigger instead
+        const clickableParent = target.closest("a, button, [role='button'], [role='link']") as HTMLElement;
+        if (clickableParent) {
+          clickableParent.click();
+          return { success: true, element: clickableParent.tagName, text: clickableParent.textContent?.trim() || "" };
+        }
+        target.click();
+        return { success: true, element: target.tagName, text: target.textContent?.trim() || "" };
+      }
+    }
+  }
+
   return { success: false, error: `No element found matching: "${name}"` };
 }
 
