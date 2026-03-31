@@ -176,7 +176,6 @@ class AgentSession:
             return "ignored"
 
         if msg.upper() == "STOP":
-            self._emit("Stopping agent session...")
             self.stop()
             return "stopped"
 
@@ -253,7 +252,7 @@ class AgentSession:
 
         self._pending_action = None
         if self._stop.is_set():
-            return False
+            raise RuntimeError("Agent stopped by user")
 
         approved = self._approval_decision == "YES"
         if approved:
@@ -306,7 +305,7 @@ class AgentSession:
         pending = self._pending_user_input
         self._pending_user_input = None
         if self._stop.is_set():
-            return {"success": False, "error": "stopped"}
+            raise RuntimeError("Agent stopped by user")
 
         answer = (self._user_input_value or "").strip()
         self._user_input_value = None
@@ -335,7 +334,7 @@ class AgentSession:
         payload = params or {}
 
         if self._stop.is_set():
-            return {"success": False, "error": "stopped"}
+            raise RuntimeError("Agent stopped by user")
 
         self._emit(f"[tool:call] {action} {json.dumps(payload, ensure_ascii=True)}")
         if not self._approve(action, payload):
@@ -385,7 +384,10 @@ class AgentSession:
                 user_id=self._user_id,
             )
         except Exception as exc:
-            self._emit(f"Agent crashed: {type(exc).__name__}: {exc}")
+            if isinstance(exc, RuntimeError) and str(exc) == "Agent stopped by user":
+                self._emit("Agent session successfully stopped.")
+            else:
+                self._emit(f"Agent crashed: {type(exc).__name__}: {exc}")
         finally:
             self._out.put({"done": True})
 

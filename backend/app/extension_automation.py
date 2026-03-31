@@ -12,6 +12,7 @@ _connected: Any = None
 _pending: dict[int, asyncio.Future] = {}
 _cmd_id = 0
 _loop: asyncio.AbstractEventLoop | None = None
+_log_queue: 'asyncio.Queue[dict[str, Any]] | None' = None
 
 RECONNECT_WAIT_SECONDS = 12.0
 COMMAND_TIMEOUT_SECONDS = 20.0
@@ -51,11 +52,18 @@ async def _handle_client(websocket):
         print("[ExtensionAutomation] Browser disconnected")
 
 
-async def _send_event(event: dict[str, Any]) -> bool:
-    if _connected is None:
-        return False
-    await _connected.send(json.dumps(event))
-    return True
+async def _log_worker():
+    while True:
+        event = await _log_queue.get()
+        if _connected is None:
+            await _wait_for_connection(timeout_seconds=30.0)
+        
+        if _connected is not None:
+            try:
+                await _connected.send(json.dumps(event))
+            except Exception:
+                pass
+        _log_queue.task_done()
 
 
 async def _send_command(
@@ -99,15 +107,17 @@ def is_server_running() -> bool:
 
 
 def send_agent_log(message: str) -> dict[str, Any]:
-    if _loop is None:
+    if _loop is None or _log_queue is None:
         return {"success": False, "error": "WebSocket server not running"}
 
-    task = asyncio.run_coroutine_threadsafe(
-        _send_event({"type": "agent_log", "message": message}),
-        _loop,
-    )
-    sent = bool(task.result(timeout=5))
-    return {"success": sent}
+    def _enqueue():
+        try:
+            _log_queue.put_nowait({"type": "agent_log", "message": message})
+        except Exception:
+            pass
+
+    _loop.call_soon_threadsafe(_enqueue)
+    return {"success": True}
 
 
 def send_command_sync(
@@ -124,8 +134,10 @@ def send_command_sync(
 
 
 async def _run_server() -> None:
-    global _loop
+    global _loop, _log_queue
     _loop = asyncio.get_running_loop()
+    _log_queue = asyncio.Queue()
+    asyncio.create_task(_log_worker())
 
     async with websockets.serve(_handle_client, "0.0.0.0", EXTENSION_WS_PORT):
         print(
