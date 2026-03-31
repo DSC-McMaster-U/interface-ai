@@ -9,13 +9,6 @@ cd ..
 echo "Backend tests passed"
 echo ""
 
-echo "Running playwright tests..."
-cd playwright
-pytest tests/ || { echo "Playwright tests failed"; exit 1; }
-cd ..
-echo "Playwright tests passed"
-echo ""
-
 echo "Running vision-ai tests..."
 cd vision-ai
 pytest tests/ || { echo "Vision-AI tests failed"; exit 1; }

@@ -15,12 +15,10 @@ cd interface-ai
 
 ## 2. Get Dependencies
 
-### Python Services (backend, playwright, vision-ai)
+### Python Services (backend, vision-ai)
 
 ```bash
 cd backend
-pip install -r requirements.txt
-cd ../playwright
 pip install -r requirements.txt
 cd ../vision-ai
 pip install -r requirements.txt
@@ -47,9 +45,6 @@ docker compose up --build
 
 This starts:
 - Backend API at `http://localhost:5000`
-- Redis at `localhost:6379`
-- PostgreSQL at `localhost:5432`
-- Playwright worker
 - Vision-AI service (optional)
 
 ### Stop Services

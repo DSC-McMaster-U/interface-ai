@@ -32,10 +32,8 @@ This document explains how to set up and run tests, formatters, and linters for 
 2. **Set up Python environment**:
 
    ```bash
-   # For each Python service (backend, playwright, vision-ai)
+   # For each Python service (backend, vision-ai)
    cd backend
-   pip install -r requirements.txt
-   cd ../playwright
    pip install -r requirements.txt
    cd ../vision-ai
    pip install -r requirements.txt
@@ -97,13 +95,12 @@ Recommended workflow before committing:
 
 ### Overview
 
-- **Python Services** (backend, playwright, vision-ai): Uses `pytest`
+- **Python Services** (backend, vision-ai): Uses `pytest`
 - **Frontend** (Chrome Extension): Uses `Jest`
 
 ### Test Locations
 
 - `backend/tests/`
-- `playwright/tests/`
 - `vision-ai/tests/`
 - `frontend/tests/`
 
@@ -120,7 +117,6 @@ Recommended workflow before committing:
 ```bash
 # Python services
 cd backend && pytest tests/
-cd playwright && pytest tests/
 cd vision-ai && pytest tests/
 
 # Frontend
@@ -152,14 +148,14 @@ cd frontend && npm test
 
 This automatically formats:
 
-- All Python code in `backend/`, `playwright/`, and `vision-ai/`
+- All Python code in `backend/` and `vision-ai/`
 - All JavaScript code in `frontend/`
 
 **Run individually**:
 
 ```bash
 # Python
-black backend playwright vision-ai
+black backend vision-ai
 
 # JavaScript
 cd frontend && npx prettier --write .
@@ -169,7 +165,7 @@ cd frontend && npx prettier --write .
 
 ```bash
 # Python
-black --check backend playwright vision-ai
+black --check backend vision-ai
 
 # JavaScript
 cd frontend && npx prettier --check .
@@ -194,7 +190,7 @@ cd frontend && npx prettier --check .
 
 This automatically lints and fixes:
 
-- All Python code in `backend/`, `playwright/`, and `vision-ai/`
+- All Python code in `backend/` and `vision-ai/`
 - All JavaScript code in `frontend/`
 
 **Run individually**:
@@ -202,7 +198,6 @@ This automatically lints and fixes:
 ```bash
 # Python (with auto-fix)
 ruff check --fix backend
-ruff check --fix playwright
 ruff check --fix vision-ai
 
 # JavaScript (with auto-fix)

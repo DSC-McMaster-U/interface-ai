@@ -11,16 +11,6 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - INTERFACEAI_DB_PASSWORD=${INTERFACEAI_DB_PASSWORD}
       - MEM0_AGENT_ID=${MEM0_AGENT_ID}
-    depends_on:
-      - redis
-      - postgres
-
-  playwright:
-    build: ./playwright
-    environment:
-      - BACKEND_URL=http://backend:5000
-    depends_on:
-      - backend
 
   vision-ai:
     build: ./vision-ai
@@ -30,23 +20,3 @@ services:
       - BACKEND_URL=http://backend:5000
     profiles:
       - vision
-
-  redis:
-    image: redis:7
-    ports:
-      - "6379:6379"
-
-  postgres:
-    image: postgres:15
-    environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=interfaceai
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
-
-volumes:
-  pgdata:
