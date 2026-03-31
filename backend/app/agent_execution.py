@@ -3,10 +3,11 @@ import queue
 import threading
 import json
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 from app.extension_automation import send_agent_log, send_command_sync
 from app.langgraph.architecture_1 import run_architecture_1
+from app.langgraph.architecture_2 import run_architecture_2
 
 
 @dataclass
@@ -370,10 +371,12 @@ class AgentSession:
                 self._emit("Missing GEMINI_API_KEY env var.")
                 return
 
+            architecture_name, architecture_runner = _select_architecture_runner()
             self._emit(f"Agent started. Goal: {self._goal}")
+            self._emit(f"Using LangGraph runner: {architecture_name}")
             max_steps = 80
 
-            run_architecture_1(
+            architecture_runner(
                 api_key=api_key,
                 goal=self._goal,
                 max_steps=max_steps,
@@ -388,6 +391,13 @@ class AgentSession:
             self._emit(f"Agent crashed: {type(exc).__name__}: {exc}")
         finally:
             self._out.put({"done": True})
+
+
+def _select_architecture_runner() -> tuple[str, Callable[..., None]]:
+    selection = (os.getenv("LANGGRAPH_ARCHITECTURE") or "1").strip().lower()
+    if selection in {"2", "architecture_2", "arch2"}:
+        return "architecture_2", run_architecture_2
+    return "architecture_1", run_architecture_1
 
 
 session = AgentSession()
