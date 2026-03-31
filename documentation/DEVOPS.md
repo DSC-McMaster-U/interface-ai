@@ -7,15 +7,11 @@ docker compose up --build backend
 ```
 - **Start multiple services**
 ```powershell
-docker compose up --build backend redis postgres
+docker compose up --build backend
 ```
 - **Start optional Vision-AI (profile)**
 ```powershell
 docker compose --profile vision up --build vision-ai
-```
-- **Run one-off (ephemeral) task**
-```powershell
-docker compose run --rm playwright
 ```
 - **Tail logs for one service**
 ```powershell
@@ -35,10 +31,6 @@ docker compose restart backend
 # Backend
 docker compose build backend
 docker compose up -d backend
-
-# Playwright
-docker compose build playwright
-docker compose up -d playwright
 
 # Vision-AI (behind profile)
 docker compose --profile vision build vision-ai
@@ -73,17 +65,6 @@ python -m venv .venv
 python -m pip install --upgrade pip
 ```
 
-- **Playwright worker locally** (`playwright/worker.py`)
-```powershell
-python -m pip install -r playwright/requirements.txt
-$env:BACKEND_URL = "http://localhost:5000"
-python .\playwright\worker.py
-```
-Expected output:
-- "Playwright worker starting…"
-- "Backend health: ok"
-- "Worker ready."
-
 - **Vision-AI locally** (`vision-ai/service.py`)
 ```powershell
 python -m pip install -r vision-ai/requirements.txt
@@ -110,4 +91,4 @@ curl -X POST http://localhost:5000/api/relay -H "Content-Type: application/json"
 ## Notes
 - **CORS/extension**: Backend allows `http://localhost:*` and `chrome-extension://*`. Ensure the backend is reachable at `http://localhost:5000` for the extension in `frontend/`.
 - **Profiles**: `vision-ai` is optional via the `vision` profile; include `--profile vision` when starting it.
-- **Caching**: Avoid touching `requirements.txt` unless needed; it invalidates Docker’s layer cache and slows builds.
+- **Caching**: Avoid touching `requirements.txt` unless needed; it invalidates Docker's layer cache and slows builds.

@@ -66,10 +66,7 @@ By combining intent recognition, vision-based action execution, and contextual a
 
 - **frontend:** Chrome Extension (`frontend`)
 - **backend:** Flask API at `http://localhost:5000` (`backend/app/main.py`)
-- **playwright:** Minimal Python worker (`playwright/worker.py`)
 - **vision-ai:** Minimal Flask service (`vision-ai/service.py`)
-- **redis:** Cache/queue at `localhost:6379`
-- **postgres:** DB at `localhost:5432` with init script `scripts/init_db.sql`
 
 ### Run
 
@@ -126,14 +123,10 @@ interface-ai/
 │   ├── manifest.json
 │   ├── popup.html
 │   └── popup.js
-├── playwright/
-│   ├── Dockerfile
-│   └── worker.py
 ├── vision-ai/
 │   ├── Dockerfile
 │   └── service.py
 └── scripts/
-    └── init_db.sql
 ```
 
 ---
@@ -142,4 +135,3 @@ interface-ai/
 
 - Backend CORS allows `http://localhost:*` and `chrome-extension://*` for simple dev flow.
 - Update `frontend/manifest.json` `host_permissions` if backend URL changes.
-- Postgres credentials are development defaults; change for production.

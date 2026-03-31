@@ -2,15 +2,13 @@
 set -e
 
 echo "Formatting Python code with Black..."
-black backend playwright vision-ai || { echo "Black formatting failed"; exit 1; }
+black backend vision-ai || { echo "Black formatting failed"; exit 1; }
 echo "Python code formatted"
 echo ""
 
 echo "Linting Python code with Ruff..."
 echo "  Checking backend..."
 ruff check --fix backend || { echo "Backend linting failed"; exit 1; }
-echo "  Checking playwright..."
-ruff check --fix playwright || { echo "Playwright linting failed"; exit 1; }
 echo "  Checking vision-ai..."
 ruff check --fix vision-ai || { echo "Vision-AI linting failed"; exit 1; }
 echo "Python linting passed"
