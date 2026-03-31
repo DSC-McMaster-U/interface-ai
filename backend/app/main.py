@@ -314,6 +314,8 @@ def _handle_non_goal_command(msg: str) -> list[dict[str, object]]:
             "APPROVAL ON - require approval before each browser tool call.\n\n"
             "APPROVAL OFF - auto-approve browser tool calls.\n\n"
             "APPROVAL STATUS - show whether approvals are on or off.\n\n"
+            "VISION [ON/OFF/FORCE/FALLBACK] - change vision AI mode.\n\n"
+            "VISION STATUS - show current vision mode.\n\n"
             "CLEAR - clear chat history in the overlay.\n\n"
             "If the agent asks for missing information, just reply normally in chat with the answer.\n\n"
             "If the agent is waiting for approval, reply YES to allow the tool call or send feedback to reject and redirect it."
@@ -331,6 +333,18 @@ def _handle_non_goal_command(msg: str) -> list[dict[str, object]]:
     if msg.upper() == "APPROVAL STATUS":
         status = "ON" if session.get_require_approval() else "OFF"
         return [{"message": f"Approval mode: {status}"}, {"done": True}]
+
+    if msg.upper().startswith("VISION "):
+        mode = msg.upper().split(" ", 1)[1].strip()
+        if mode == "STATUS":
+            return [{"message": f"Vision mode: {session.get_vision_mode()}"}, {"done": True}]
+        elif mode in ["ON", "OFF", "FORCE", "FALLBACK"]:
+            if mode == "ON":
+                mode = "FALLBACK"
+            session.set_vision_mode(mode)
+            return [{"message": f"Vision mode set to: {mode}"}, {"done": True}]
+        else:
+            return [{"message": f"Unknown vision mode: {mode}. Use ON, OFF, FORCE, or FALLBACK."}, {"done": True}]
 
     if msg.upper().startswith("SET USER ID:"):
         user_id = msg.split(":", 1)[1].strip()

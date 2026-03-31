@@ -1,6 +1,8 @@
 import json
 import logging
 import threading
+import requests
+import os
 from typing import Any, Callable
 
 from langchain_core.messages import (
@@ -287,18 +289,86 @@ def run_architecture_1(
 
     @tool
     def goto(url: str) -> dict[str, Any]:
-        """Navigate current tab to url."""
+        """Navigate current tab to url. Do NOT use this tool if the user wants to `search` for something. If the goal involves searching, use the search bar on the current page instead of navigating directly to the search engine URL."""
         return tracked_send("goto", {"url": url})
+
+    def _run_vision_fallback(query: str, action: str, fallback_value: str = "") -> dict[str, Any]:
+        from app.agent_execution import session
+        vision_mode = getattr(session, "get_vision_mode", lambda: "FALLBACK")()
+        if vision_mode == "OFF":
+            return {"success": False, "error": "Vision mode is OFF"}
+            
+        semantic_query = query
+        try:
+            for group in ["textboxes", "buttons", "links", "checkboxes", "radios", "dropdowns"]:
+                for el in latest_status.get(group, []):
+                    if el.get("id") == query or el.get("name") == query:
+                        semantic_query = el.get("ariaLabel") or el.get("placeholder") or el.get("text") or el.get("title") or query
+                        break
+        except Exception:
+            pass
+            
+        emit(f"Vision AI ({vision_mode} mode) activating for '{query}'...")
+        shot = approved_send("takeScreenshot", {})
+        if not shot.get("success") or not shot.get("data"):
+            return {"success": False, "error": f"Vision AI failed: Could not capture screenshot."}
+        
+        img_data = shot["data"]
+        url = os.getenv("VISION_AI_URL", "http://vision-ai:6000")
+        try:
+            res = requests.post(f"{url}/find_element", json={"query": semantic_query, "image": img_data}, timeout=15)
+            res.raise_for_status()
+            vision_data = res.json()
+            
+            if not vision_data.get("success") or "center" not in vision_data:
+                return {"success": False, "error": f"Vision AI could not locate '{query}' on screen."}
+                
+            center = vision_data["center"]
+            cx, cy = center["x"], center["y"]
+            emit(f"Vision AI found '{query}' at ({cx}, {cy}). Executing {action}...")
+            
+            click_res = tracked_send("clickAtCoordinate", {"x": cx, "y": cy})
+            if not click_res.get("success"):
+                return {"success": False, "error": f"Vision AI click at ({cx}, {cy}) failed: {click_res.get('error')}"}
+
+            if action == "fillInput":
+                type_res = tracked_send("fillActiveInput", {"text": fallback_value})
+                if not type_res.get("success"):
+                    return {"success": False, "error": f"Vision AI type text failed: {type_res.get('error')}"}
+                return {"success": True, "vision_used": True, "message": f"Successfully clicked and typed into '{query}' via Vision AI."}
+                
+            return {"success": True, "vision_used": True, "message": f"Successfully clicked '{query}' via Vision AI."}
+            
+        except Exception as e:
+            return {"success": False, "error": f"Vision AI request failed: {str(e)}"}
 
     @tool
     def clickByName(name: str, exactMatch: bool = False) -> dict[str, Any]:
         """Click element by visible text."""
-        return tracked_send("clickByName", {"name": name, "exactMatch": exactMatch})
+        from app.agent_execution import session
+        vision_mode = getattr(session, "get_vision_mode", lambda: "FALLBACK")()
+        
+        if vision_mode == "FORCE":
+            return _run_vision_fallback(name, "clickByName")
+
+        res = tracked_send("clickByName", {"name": name, "exactMatch": exactMatch})
+        if not res.get("success") and vision_mode == "FALLBACK":
+            return _run_vision_fallback(name, "clickByName")
+        return res
 
     @tool
     def fillInput(identifier: str, value: str) -> dict[str, Any]:
         """Fill input field by identifier with value."""
-        return tracked_send("fillInput", {"identifier": identifier, "value": value})
+        from app.agent_execution import session
+        vision_mode = getattr(session, "get_vision_mode", lambda: "FALLBACK")()
+        
+        if vision_mode == "FORCE":
+            return _run_vision_fallback(identifier, "fillInput", fallback_value=value)
+
+        res = tracked_send("fillInput", {"identifier": identifier, "value": value})
+        if not res.get("success") and vision_mode == "FALLBACK":
+            return _run_vision_fallback(identifier, "fillInput", fallback_value=value)
+        return res
 
     @tool
     def pressEnter() -> dict[str, Any]:
@@ -729,7 +799,7 @@ def run_architecture_1(
                 content=(
                     f"Task is not complete yet. Reason: {reason}. "
                     f"Suggested next direction: {next_step_hint}. "
-                    "Try a different approach and continue."
+                    "Continue executing the task based on the current state. Take the next logical step."
                 )
             ),
         ]
@@ -759,3 +829,10 @@ def run_architecture_1(
             initial_status=initial_status,
             final_status=latest_status,
         )
+
+
+
+
+
+
+

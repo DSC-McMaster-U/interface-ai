@@ -5,12 +5,20 @@ services:
       - "5000:5000"
       - "7878:7878"
     volumes:
-      - ./backend:/app
+      - type: bind
+        source: ./backend
+        target: /app
     environment:
       - PYTHONUNBUFFERED=1
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - INTERFACEAI_DB_PASSWORD=${INTERFACEAI_DB_PASSWORD}
+      - DB_HOST=postgres
+      - DB_NAME=interfaceai-db
+      - DB_USER=postgres
+      - DB_SSLMODE=disable
       - MEM0_AGENT_ID=${MEM0_AGENT_ID}
+    depends_on:
+      - postgres
 
   vision-ai:
     build: ./vision-ai
@@ -23,3 +31,17 @@ services:
       - "6000:6000"
     profiles:
       - vision
+
+  postgres:
+    image: pgvector/pgvector:pg15
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${INTERFACEAI_DB_PASSWORD}
+      - POSTGRES_DB=interfaceai-db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

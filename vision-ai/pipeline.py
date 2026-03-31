@@ -207,7 +207,7 @@ If the element cannot be found, respond with an empty array: []"""
 
     try:
         response = _gemini_client.models.generate_content(
-            model='gemini-2.5-pro',
+            model='gemini-2.5-flash',
             contents=[image, prompt]
         )
         
@@ -286,10 +286,11 @@ def find_element_unified(image_path: str, query: str) -> Tuple[List[Tuple[int, i
         'settings': ['gear icon', 'cogwheel', 'cog icon', 'preferences icon'],
         'account': ['user icon', 'profile icon', 'person icon', 'avatar'],
         'home': ['house icon', 'home icon', 'building'],
-        'search': ['magnifying glass', 'search icon', 'lens icon'],
+        'search': ['magnifying glass', 'search icon', 'lens icon', 'search bar', 'search box', 'search input'],
         'menu': ['hamburger menu', 'three lines', 'navigation icon', 'menu bars'],
-        'close': ['x icon', 'close icon', 'cancel icon', 'cross icon'],
-        'delete': ['trash icon', 'bin icon', 'garbage icon', 'delete icon']
+        'close': ['x icon', 'close icon', 'cancel icon', 'cross icon', 'close button'],
+        'delete': ['trash icon', 'bin icon', 'garbage icon', 'delete icon'],
+        'input': ['text box', 'input field', 'text field', 'search bar']
     }
     for key, synonyms in fallback_expansions.items():
         if key in query_lower:
@@ -329,8 +330,7 @@ def find_element_unified(image_path: str, query: str) -> Tuple[List[Tuple[int, i
         pro_boxes = escalate_to_pro(image_path, query, image_size)
         
         if pro_boxes:
-            snapped_boxes = snap_to_nearest_box(pro_boxes[0], all_candidate_boxes)
-            final_boxes = deduplicate_boxes(snapped_boxes)
+            final_boxes = deduplicate_boxes(pro_boxes)
 
     inference_time = time.time() - start_time
     return final_boxes, inference_time
@@ -345,4 +345,6 @@ def process_image(image_path: str, query: str, output_path: str):
     
     draw_bounding_boxes(image_path, boxes, query, duration, output_path)
     print(f"Output saved to: {output_path}")
+
+
 

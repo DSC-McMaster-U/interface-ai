@@ -19,11 +19,11 @@ logger = logging.getLogger(__name__)
 
 _USER_ID_NAMESPACE = uuid.UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
 
-_HARDCODED_DB_HOST = "34.130.177.250"
-_HARDCODED_DB_PORT = 5432
-_HARDCODED_DB_NAME = "interfaceai-db"
-_HARDCODED_DB_USER = "postgres"
-_HARDCODED_DB_SSLMODE = "require"
+_HARDCODED_DB_HOST = os.getenv("DB_HOST", "34.130.177.250")
+_HARDCODED_DB_PORT = os.getenv("DB_PORT", "5432")
+_HARDCODED_DB_NAME = os.getenv("DB_NAME", "interfaceai-db")
+_HARDCODED_DB_USER = os.getenv("DB_USER", "postgres")
+_HARDCODED_DB_SSLMODE = os.getenv("DB_SSLMODE", "require")
 _DB_PASSWORD_ENV_VAR = "INTERFACEAI_DB_PASSWORD"
 
 
