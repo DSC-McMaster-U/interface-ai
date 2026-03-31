@@ -171,7 +171,11 @@ export function summarizeResult(
 ): string {
   const payload =
     "data" in obj && obj.data && typeof obj.data === "object"
-      ? (obj.data as ActionResult | PageStatus | WebsiteContent | Record<string, unknown>)
+      ? (obj.data as
+          | ActionResult
+          | PageStatus
+          | WebsiteContent
+          | Record<string, unknown>)
       : obj;
 
   if ("paragraphs" in payload && "fullText" in payload && "title" in payload) {

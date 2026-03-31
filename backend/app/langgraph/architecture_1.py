@@ -128,7 +128,12 @@ def run_architecture_1(
         field_key: str = "",
         limit: int = 5,
     ) -> list[dict[str, Any]]:
-        payload = {"user_id": user_id, "query": query, "field_key": field_key, "limit": limit}
+        payload = {
+            "user_id": user_id,
+            "query": query,
+            "field_key": field_key,
+            "limit": limit,
+        }
         memory_log("user", "call", payload)
         results = memory_store.search_user_memories(
             user_id=user_id,
@@ -237,7 +242,9 @@ def run_architecture_1(
                         ],
                     )
                     entries = normalize_user_memory_entries(
-                        parse_json_payload(content_to_text(getattr(extraction, "content", "")))
+                        parse_json_payload(
+                            content_to_text(getattr(extraction, "content", ""))
+                        )
                     )
                     add_user_memory_entries(entries)
 
@@ -269,7 +276,9 @@ def run_architecture_1(
                 ],
             )
             agent_entries = normalize_agent_memory_entries(
-                parse_json_payload(content_to_text(getattr(agent_summary, "content", "")))
+                parse_json_payload(
+                    content_to_text(getattr(agent_summary, "content", ""))
+                )
             )
             add_agent_memory_entries(agent_entries)
             emit("Continuous learning updated.")

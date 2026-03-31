@@ -203,7 +203,9 @@ def get_profile(user_id: str) -> dict[str, Any]:
             )
             rows = cur.fetchall() or []
             preferences = {
-                str(row.get("field_key") or "").strip(): str(row.get("fact") or "").strip()
+                str(row.get("field_key") or "")
+                .strip(): str(row.get("fact") or "")
+                .strip()
                 for row in rows
                 if str(row.get("field_key") or "").strip()
                 and str(row.get("fact") or "").strip()
@@ -284,5 +286,7 @@ def upsert_profile(user_id: str, preferences: dict[str, Any]) -> dict[str, Any]:
                 )
         return {"user_id": normalized_user_id, "preferences": merged_preferences}
 
-    logger.warning("profiles table schema is not recognized; returning in-memory profile")
+    logger.warning(
+        "profiles table schema is not recognized; returning in-memory profile"
+    )
     return {"user_id": normalized_user_id, "preferences": normalized_preferences}

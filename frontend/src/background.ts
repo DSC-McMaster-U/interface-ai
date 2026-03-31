@@ -99,14 +99,12 @@ function respondAsync(
   task: Promise<ApiResponse>,
   fallbackError: string,
 ): boolean {
-  task
-    .then(sendResponse)
-    .catch((error) => {
-      sendResponse({
-        success: false,
-        error: error instanceof Error ? error.message : fallbackError,
-      });
+  task.then(sendResponse).catch((error) => {
+    sendResponse({
+      success: false,
+      error: error instanceof Error ? error.message : fallbackError,
     });
+  });
   return true;
 }
 
@@ -322,7 +320,8 @@ async function getUserSettings(): Promise<ApiResponse> {
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to get settings",
+        error:
+          error instanceof Error ? error.message : "Failed to get settings",
       };
     }
   });
@@ -381,7 +380,8 @@ async function getUserMemories(): Promise<ApiResponse> {
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to load memories",
+        error:
+          error instanceof Error ? error.message : "Failed to load memories",
       };
     }
   });
@@ -440,7 +440,8 @@ async function deleteUserMemory(payload: {
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to delete memory",
+        error:
+          error instanceof Error ? error.message : "Failed to delete memory",
       };
     }
   });
@@ -467,7 +468,9 @@ async function getAgentMemories(): Promise<ApiResponse> {
     return {
       success: false,
       error:
-        error instanceof Error ? error.message : "Failed to load agent memories",
+        error instanceof Error
+          ? error.message
+          : "Failed to load agent memories",
     };
   }
 }
@@ -499,7 +502,9 @@ async function deleteAgentMemory(payload: {
     return {
       success: false,
       error:
-        error instanceof Error ? error.message : "Failed to delete agent memory",
+        error instanceof Error
+          ? error.message
+          : "Failed to delete agent memory",
     };
   }
 }
@@ -793,14 +798,20 @@ chrome.runtime.onMessage.addListener(
     if (message.type === "GET_AGENT_WS_STATE") {
       sendResponse({
         success: true,
-        data: { enabled: !!_sender.tab?.id && _sender.tab.id === agentTargetTabId },
+        data: {
+          enabled: !!_sender.tab?.id && _sender.tab.id === agentTargetTabId,
+        },
       });
       return true;
     }
 
     // ----- Settings -----
     if (message.type === "GET_USER_SETTINGS") {
-      return respondAsync(sendResponse, getUserSettings(), "Failed to get settings");
+      return respondAsync(
+        sendResponse,
+        getUserSettings(),
+        "Failed to get settings",
+      );
     }
 
     if (message.type === "UPDATE_USER_SETTINGS") {
@@ -812,7 +823,11 @@ chrome.runtime.onMessage.addListener(
     }
 
     if (message.type === "GET_USER_MEMORIES") {
-      return respondAsync(sendResponse, getUserMemories(), "Failed to get memories");
+      return respondAsync(
+        sendResponse,
+        getUserMemories(),
+        "Failed to get memories",
+      );
     }
 
     if (message.type === "ADD_USER_MEMORY") {
@@ -850,19 +865,30 @@ chrome.runtime.onMessage.addListener(
     if (message.type === "EXECUTE_ACTION") {
       return respondAsync(
         sendResponse,
-        relayActionToTab((message as ExecuteActionMessage).payload, _sender.tab?.id),
+        relayActionToTab(
+          (message as ExecuteActionMessage).payload,
+          _sender.tab?.id,
+        ),
         "Action relay failed",
       );
     }
 
     if (message.type === "FIND_AND_FETCH_FILE") {
       const { fileName } = message as { type: string; fileName: string };
-      return respondAsync(sendResponse, findAndFetchFile(fileName), "Search failed");
+      return respondAsync(
+        sendResponse,
+        findAndFetchFile(fileName),
+        "Search failed",
+      );
     }
 
     if (message.type === "FETCH_FILE") {
       const { fileUrl } = message as { type: string; fileUrl: string };
-      return respondAsync(sendResponse, fetchFileAsDataUrl(fileUrl), "Fetch failed");
+      return respondAsync(
+        sendResponse,
+        fetchFileAsDataUrl(fileUrl),
+        "Fetch failed",
+      );
     }
 
     if (message.type === "TAKE_SCREENSHOT") {

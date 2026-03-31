@@ -585,7 +585,8 @@ export function renderSettings(
       </div>
       <div class="memories-container" id="memories-container">
         ${renderMemoryList(memories, {
-          emptyText: "No cached user memories yet. Press Reload to sync from cloud.",
+          emptyText:
+            "No cached user memories yet. Press Reload to sync from cloud.",
           deletable: true,
           includeMeta: false,
         })}
@@ -807,8 +808,12 @@ function asUserMemories(response: ApiResponse): UserMemory[] | null {
     : null;
 }
 
-function asAgentMemoriesPayload(response: ApiResponse): AgentMemoriesPayload | null {
-  if (!(response.success && response.data && typeof response.data === "object")) {
+function asAgentMemoriesPayload(
+  response: ApiResponse,
+): AgentMemoriesPayload | null {
+  if (
+    !(response.success && response.data && typeof response.data === "object")
+  ) {
     return null;
   }
   const data = response.data as {
@@ -1048,16 +1053,17 @@ export async function fetchAgentMemories(): Promise<{
   agentId: string;
   memories: UserMemory[];
 } | null> {
-  return sendMessage({ type: "GET_AGENT_MEMORIES" }, {
-    runtimeError: "[Settings] Error fetching agent memories:",
-    failureError: "[Settings] Failed to fetch agent memories:",
-    mapResponse: asAgentMemoriesPayload,
-  });
+  return sendMessage(
+    { type: "GET_AGENT_MEMORIES" },
+    {
+      runtimeError: "[Settings] Error fetching agent memories:",
+      failureError: "[Settings] Failed to fetch agent memories:",
+      mapResponse: asAgentMemoriesPayload,
+    },
+  );
 }
 
-export async function deleteAgentMemory(
-  memory: UserMemory,
-): Promise<{
+export async function deleteAgentMemory(memory: UserMemory): Promise<{
   agentId: string;
   memories: UserMemory[];
 } | null> {

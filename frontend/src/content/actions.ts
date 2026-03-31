@@ -24,18 +24,15 @@ function nativeInputValueSet(
   } else {
     el.value = value;
   }
-  const tracker = (el as HTMLInputElement & { _valueTracker?: { setValue(v: string): void } })
-    ._valueTracker;
+  const tracker = (
+    el as HTMLInputElement & { _valueTracker?: { setValue(v: string): void } }
+  )._valueTracker;
   tracker?.setValue(String(value ?? ""));
 }
 
 function resolveTextLikeElement(
   identifier: string,
-):
-  | HTMLInputElement
-  | HTMLTextAreaElement
-  | HTMLElement
-  | null {
+): HTMLInputElement | HTMLTextAreaElement | HTMLElement | null {
   const lower = identifier.toLowerCase();
   const selectors = [
     `input[name="${identifier}" i], textarea[name="${identifier}" i]`,
@@ -50,7 +47,8 @@ function resolveTextLikeElement(
 
   for (const selector of selectors) {
     const element = document.querySelector(selector);
-    if (element) return element as HTMLInputElement | HTMLTextAreaElement | HTMLElement;
+    if (element)
+      return element as HTMLInputElement | HTMLTextAreaElement | HTMLElement;
   }
 
   for (const label of document.querySelectorAll("label")) {
@@ -76,13 +74,11 @@ function resolveTextLikeElement(
   };
 
   if (typeMap[lower]) {
-    return (
-      document.querySelector(typeMap[lower]) as
-        | HTMLInputElement
-        | HTMLTextAreaElement
-        | HTMLElement
-        | null
-    );
+    return document.querySelector(typeMap[lower]) as
+      | HTMLInputElement
+      | HTMLTextAreaElement
+      | HTMLElement
+      | null;
   }
 
   return null;
@@ -102,7 +98,13 @@ function setTextLikeElementValue(
     }
     el.focus();
     nativeInputValueSet(el, value);
-    el.dispatchEvent(new InputEvent("beforeinput", { bubbles: true, data: value, inputType: "insertText" }));
+    el.dispatchEvent(
+      new InputEvent("beforeinput", {
+        bubbles: true,
+        data: value,
+        inputType: "insertText",
+      }),
+    );
     el.dispatchEvent(new Event("input", { bubbles: true }));
     el.dispatchEvent(new Event("change", { bubbles: true }));
     return {
@@ -115,8 +117,20 @@ function setTextLikeElementValue(
   el.focus();
   el.click();
   el.textContent = value;
-  el.dispatchEvent(new InputEvent("beforeinput", { bubbles: true, data: value, inputType: "insertText" }));
-  el.dispatchEvent(new InputEvent("input", { bubbles: true, data: value, inputType: "insertText" }));
+  el.dispatchEvent(
+    new InputEvent("beforeinput", {
+      bubbles: true,
+      data: value,
+      inputType: "insertText",
+    }),
+  );
+  el.dispatchEvent(
+    new InputEvent("input", {
+      bubbles: true,
+      data: value,
+      inputType: "insertText",
+    }),
+  );
   el.dispatchEvent(new Event("change", { bubbles: true }));
   return {
     success: true,
@@ -283,7 +297,10 @@ export function pressEnterOn(identifier: string): ActionResult {
 
 export function typeText(text: string): ActionResult {
   const active = document.activeElement as HTMLElement | null;
-  if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
+  if (
+    active instanceof HTMLInputElement ||
+    active instanceof HTMLTextAreaElement
+  ) {
     const start = active.selectionStart ?? active.value.length;
     const end = active.selectionEnd ?? active.value.length;
     const nextValue =
@@ -470,7 +487,9 @@ export function selectRadio(identifier: string, value: string): ActionResult {
     return (
       r.name.toLowerCase() === lowerIdentifier ||
       r.id.toLowerCase() === lowerIdentifier ||
-      (r.getAttribute("aria-label") || "").toLowerCase().includes(lowerIdentifier) ||
+      (r.getAttribute("aria-label") || "")
+        .toLowerCase()
+        .includes(lowerIdentifier) ||
       (label || "").toLowerCase().includes(lowerIdentifier)
     );
   });
@@ -619,7 +638,9 @@ export function uploadFileInDom(
       'a, button, [role="row"], [role="listitem"], li, tr, [role="option"]',
     ),
   );
-  const match = candidates.find((el) => el.textContent?.toLowerCase().includes(kw));
+  const match = candidates.find((el) =>
+    el.textContent?.toLowerCase().includes(kw),
+  );
   if (!match) {
     return {
       success: false,
@@ -665,18 +686,27 @@ export async function uploadFile(
   }
 
   // First priority for bare names: search Chrome downloads and common local folders.
-  if (!looksLikeDirectPath(target) || (!!filePath && !looksLikeDirectPath(filePath))) {
+  if (
+    !looksLikeDirectPath(target) ||
+    (!!filePath && !looksLikeDirectPath(filePath))
+  ) {
     const bgResponse = await fetchDataUrlFromBackground({
       type: "FIND_AND_FETCH_FILE",
       fileName: target,
     });
     if (bgResponse.success && bgResponse.data) {
-      return attachDataUrlToInput(input, bgResponse.data, target.split(/[/\\]/).pop() || target);
+      return attachDataUrlToInput(
+        input,
+        bgResponse.data,
+        target.split(/[/\\]/).pop() || target,
+      );
     }
     if (!filePath || !looksLikeDirectPath(filePath)) {
       return {
         success: false,
-        error: bgResponse.error ?? `"${target}" not found in downloads or common local folders`,
+        error:
+          bgResponse.error ??
+          `"${target}" not found in downloads or common local folders`,
       };
     }
   }
@@ -851,16 +881,16 @@ export function getPageStatus(): PageStatus {
     return rect.width > 0 && rect.height > 0;
   };
 
-  const trim = (
-    value: string | null | undefined,
-    maxLength: number,
-  ): string => (value || "").replace(/\s+/g, " ").trim().substring(0, maxLength);
+  const trim = (value: string | null | undefined, maxLength: number): string =>
+    (value || "").replace(/\s+/g, " ").trim().substring(0, maxLength);
 
   const getElementLabel = (
     el: HTMLInputElement | HTMLTextAreaElement,
   ): string | null => {
     if (el.id) {
-      const forLabel = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+      const forLabel = document.querySelector(
+        `label[for="${CSS.escape(el.id)}"]`,
+      );
       if (forLabel) return trim(forLabel.textContent, 80) || null;
     }
     if (el.closest("label")) {
@@ -956,7 +986,9 @@ export function getPageStatus(): PageStatus {
       checked: !!r.checked,
       label: getElementLabel(r),
     }));
-  const textareas = Array.from(document.querySelectorAll<HTMLTextAreaElement>("textarea"))
+  const textareas = Array.from(
+    document.querySelectorAll<HTMLTextAreaElement>("textarea"),
+  )
     .filter((t) => isVisible(t))
     .slice(0, 20)
     .map((t) => ({

@@ -11,7 +11,14 @@
   "icons": {
     "128": "logo_128.png"
   },
-  "permissions": ["activeTab", "scripting", "tabs", "downloads", "storage", "identity"],
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "tabs",
+    "downloads",
+    "storage",
+    "identity"
+  ],
   "oauth2": {
     "client_id": "1090393339218-rpb63h3pf0sb48laatn4d8p26rucmoqs.apps.googleusercontent.com",
     "scopes": [

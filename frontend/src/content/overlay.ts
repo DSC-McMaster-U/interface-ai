@@ -134,7 +134,9 @@ export class InterfaceAIOverlay {
     });
   }
 
-  private hideNonTargetViews(target: "chat" | "settings" | "agents" | "test"): void {
+  private hideNonTargetViews(
+    target: "chat" | "settings" | "agents" | "test",
+  ): void {
     const chatView = this.shadowRoot?.getElementById("chat-view");
     const settingsView = this.shadowRoot?.getElementById("settings-view");
     const agentsView = this.shadowRoot?.getElementById("agents-view");

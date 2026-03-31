@@ -140,9 +140,10 @@ class Mem0MemoryStore:
     def _build_client(self, collection_name: str):
         from mem0 import Memory
 
-        api_key = os.getenv("GEMINI_API_KEY", "").strip() or os.getenv(
-            "GOOGLE_API_KEY", ""
-        ).strip()
+        api_key = (
+            os.getenv("GEMINI_API_KEY", "").strip()
+            or os.getenv("GOOGLE_API_KEY", "").strip()
+        )
         if not api_key:
             raise RuntimeError("Missing GEMINI_API_KEY (or GOOGLE_API_KEY) env var.")
 
@@ -421,7 +422,9 @@ class Mem0MemoryStore:
                 value += 1.0
             if task_type and meta.get("task_type") == task_type:
                 value += 2.0
-            value += float(min(len(_keywords(goal) & _keywords(item.get("fact", ""))), 3))
+            value += float(
+                min(len(_keywords(goal) & _keywords(item.get("fact", ""))), 3)
+            )
             return value, str(item.get("updated_at") or "")
 
         results.sort(key=score, reverse=True)
@@ -434,7 +437,9 @@ class Mem0MemoryStore:
     ) -> list[dict[str, Any]]:
         if not self.agent_id:
             return []
-        response = self.agent_client.get_all(agent_id=self.agent_id, limit=max(limit, 20))
+        response = self.agent_client.get_all(
+            agent_id=self.agent_id, limit=max(limit, 20)
+        )
         results = self._normalize_results(response)
         deduped: list[dict[str, Any]] = []
         seen_facts: set[str] = set()

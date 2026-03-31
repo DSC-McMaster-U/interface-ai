@@ -7,7 +7,9 @@ from app.continuous_learning import (
 
 
 def test_domain_and_task_inference():
-    assert infer_target_domain("go to careers.tesla.com and apply") == "careers.tesla.com"
+    assert (
+        infer_target_domain("go to careers.tesla.com and apply") == "careers.tesla.com"
+    )
     assert infer_task_type("search tesla internships") == "search_tesla_internships"
 
 

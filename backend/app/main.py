@@ -185,9 +185,9 @@ def delete_user_memory():
     if not field_key and not memory_id:
         return jsonify({"error": "missing field_key or memory_id"}), 400
 
-    deleted_count = Mem0MemoryStore(
-        agent_id=session.get_agent_id()
-    ).delete_user_memory(user_id=user_id, field_key=field_key, memory_id=memory_id)
+    deleted_count = Mem0MemoryStore(agent_id=session.get_agent_id()).delete_user_memory(
+        user_id=user_id, field_key=field_key, memory_id=memory_id
+    )
     return _user_memories_response(user_id, deleted_count=deleted_count)
 
 
@@ -340,7 +340,10 @@ def _handle_non_goal_command(msg: str) -> list[dict[str, object]]:
             session.set_user_id(user_id)
         except ValueError as exc:
             return [{"message": str(exc)}, {"done": True}]
-        return [{"message": f"Active user id set to: {session.get_user_id()}"}, {"done": True}]
+        return [
+            {"message": f"Active user id set to: {session.get_user_id()}"},
+            {"done": True},
+        ]
 
     if msg.upper() == "USER ID":
         return [{"message": f"Active user id: {session.get_user_id()}"}, {"done": True}]
@@ -353,10 +356,16 @@ def _handle_non_goal_command(msg: str) -> list[dict[str, object]]:
             session.set_agent_id(agent_id)
         except ValueError as exc:
             return [{"message": str(exc)}, {"done": True}]
-        return [{"message": f"Active agent id set to: {session.get_agent_id()}"}, {"done": True}]
+        return [
+            {"message": f"Active agent id set to: {session.get_agent_id()}"},
+            {"done": True},
+        ]
 
     if msg.upper() == "AGENT ID":
-        return [{"message": f"Active agent id: {session.get_agent_id()}"}, {"done": True}]
+        return [
+            {"message": f"Active agent id: {session.get_agent_id()}"},
+            {"done": True},
+        ]
 
     if msg and (
         session.is_waiting_for_approval() or session.is_waiting_for_user_input()

@@ -671,7 +671,10 @@ async function handleCommand(
       }
       const group = argParts[0];
       const option = argParts.slice(1).join(" ");
-      report(selectRadio(group, option), `Select radio "${option}" in "${group}"`);
+      report(
+        selectRadio(group, option),
+        `Select radio "${option}" in "${group}"`,
+      );
       return true;
     }
 
@@ -699,7 +702,11 @@ async function handleCommand(
         /^https?:\/\//i.test(rest) ||
         rest.includes("\\");
 
-      uploadFile(field, looksLikePath ? rest : undefined, keyword ?? (!looksLikePath ? rest : undefined)).then((r) => {
+      uploadFile(
+        field,
+        looksLikePath ? rest : undefined,
+        keyword ?? (!looksLikePath ? rest : undefined),
+      ).then((r) => {
         if (!r.success) {
           addMsg(
             `Could not attach "${rest}" automatically. Opening file picker so you can select it manually.`,
@@ -1100,14 +1107,19 @@ function consumeSseEvents(buffer: string): {
 
 async function getSignedInUserId(): Promise<string> {
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ type: "GET_AUTH_STATE" }, (response: ApiResponse) => {
-      if (chrome.runtime.lastError) {
-        resolve("");
-        return;
-      }
-      const user = (response?.success ? response.data : null) as AuthUser | null;
-      resolve(user?.userId || "");
-    });
+    chrome.runtime.sendMessage(
+      { type: "GET_AUTH_STATE" },
+      (response: ApiResponse) => {
+        if (chrome.runtime.lastError) {
+          resolve("");
+          return;
+        }
+        const user = (
+          response?.success ? response.data : null
+        ) as AuthUser | null;
+        resolve(user?.userId || "");
+      },
+    );
   });
 }
 
