@@ -30,7 +30,9 @@ _DB_PASSWORD_ENV_VAR = "INTERFACEAI_DB_PASSWORD"
 def get_database_url() -> str:
     raw_password = os.getenv(_DB_PASSWORD_ENV_VAR, "").strip()
     if not raw_password:
-        raise RuntimeError(f"Missing required environment variable: {_DB_PASSWORD_ENV_VAR}")
+        raise RuntimeError(
+            f"Missing required environment variable: {_DB_PASSWORD_ENV_VAR}"
+        )
 
     encoded_password = quote(raw_password, safe="")
     return (
@@ -40,8 +42,6 @@ def get_database_url() -> str:
     )
 
 
-DATABASE_URL = get_database_url()
-
 _pool: psycopg.Connection | None = None
 
 
@@ -49,7 +49,9 @@ def _get_conn() -> psycopg.Connection:
     """Return a reusable connection (simple single-connection approach)."""
     global _pool
     if _pool is None or _pool.closed:
-        _pool = psycopg.connect(DATABASE_URL, row_factory=dict_row, autocommit=True)
+        _pool = psycopg.connect(
+            get_database_url(), row_factory=dict_row, autocommit=True
+        )
     return _pool
 
 
@@ -60,7 +62,7 @@ def _reset_conn() -> psycopg.Connection:
             _pool.close()
     except Exception:
         pass
-    _pool = psycopg.connect(DATABASE_URL, row_factory=dict_row, autocommit=True)
+    _pool = psycopg.connect(get_database_url(), row_factory=dict_row, autocommit=True)
     return _pool
 
 

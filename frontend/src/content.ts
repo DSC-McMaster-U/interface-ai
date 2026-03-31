@@ -112,7 +112,7 @@ function setAgentWsEnabled(enabled: boolean): void {
 chrome.runtime.sendMessage({ type: "GET_AGENT_WS_STATE" }, (response) => {
   const enabled = Boolean(
     response?.success &&
-      (response.data as { enabled?: boolean } | undefined)?.enabled,
+    (response.data as { enabled?: boolean } | undefined)?.enabled,
   );
   setAgentWsEnabled(enabled);
 });
