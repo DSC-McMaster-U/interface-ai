@@ -6,6 +6,7 @@ Uses psycopg (v3) connection pool.
 
 import json
 import logging
+import os
 import uuid
 from contextlib import contextmanager
 from typing import Any
@@ -22,12 +23,16 @@ _HARDCODED_DB_HOST = "34.130.177.250"
 _HARDCODED_DB_PORT = 5432
 _HARDCODED_DB_NAME = "interfaceai-db"
 _HARDCODED_DB_USER = "postgres"
-_HARDCODED_DB_PASSWORD = "=JVO7L6=@>qYO$m,"
 _HARDCODED_DB_SSLMODE = "require"
+_DB_PASSWORD_ENV_VAR = "INTERFACEAI_DB_PASSWORD"
 
 
 def get_database_url() -> str:
-    encoded_password = quote(_HARDCODED_DB_PASSWORD, safe="")
+    raw_password = os.getenv(_DB_PASSWORD_ENV_VAR, "").strip()
+    if not raw_password:
+        raise RuntimeError(f"Missing required environment variable: {_DB_PASSWORD_ENV_VAR}")
+
+    encoded_password = quote(raw_password, safe="")
     return (
         f"postgresql://{_HARDCODED_DB_USER}:{encoded_password}"
         f"@{_HARDCODED_DB_HOST}:{_HARDCODED_DB_PORT}/{_HARDCODED_DB_NAME}"
