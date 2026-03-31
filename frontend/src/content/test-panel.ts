@@ -1,6 +1,6 @@
 ﻿/**
  * Test Panel - DOM automation UI
- * Same functionality as action-execution/test-extension popup.
+ * Legacy standalone test-extension functionality, kept in-page.
  * Sends commands via chrome.runtime to background -> content/actions.ts.
  */
 

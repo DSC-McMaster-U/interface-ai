@@ -23,10 +23,6 @@ jobs:
         run: black --check .
         working-directory: ./backend
 
-      - name: Check Python formatting in playwright
-        run: black --check .
-        working-directory: ./playwright
-
       - name: Check Python formatting in vision-ai
         run: black --check .
         working-directory: ./vision-ai

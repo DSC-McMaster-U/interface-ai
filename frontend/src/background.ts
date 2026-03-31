@@ -28,6 +28,37 @@ interface UpdateUserSettingsMessage {
   payload: UserSettings;
 }
 
+interface GetUserMemoriesMessage {
+  type: "GET_USER_MEMORIES";
+}
+
+interface AddUserMemoryMessage {
+  type: "ADD_USER_MEMORY";
+  payload: {
+    field_key: string;
+    fact: string;
+  };
+}
+
+interface DeleteUserMemoryMessage {
+  type: "DELETE_USER_MEMORY";
+  payload: {
+    memory_id?: string;
+    field_key?: string;
+  };
+}
+
+interface GetAgentMemoriesMessage {
+  type: "GET_AGENT_MEMORIES";
+}
+
+interface DeleteAgentMemoryMessage {
+  type: "DELETE_AGENT_MEMORY";
+  payload: {
+    memory_id: string;
+  };
+}
+
 interface ExecuteActionMessage {
   type: "EXECUTE_ACTION";
   payload: Record<string, unknown>;
@@ -53,6 +84,78 @@ interface AuthUser {
   email: string;
   name?: string;
   picture?: string;
+}
+
+interface UserMemory {
+  id: string;
+  fact: string;
+  field_key: string;
+  updated_at?: string;
+  metadata?: Record<string, unknown>;
+}
+
+function respondAsync(
+  sendResponse: (response: ApiResponse) => void,
+  task: Promise<ApiResponse>,
+  fallbackError: string,
+): boolean {
+  task.then(sendResponse).catch((error) => {
+    sendResponse({
+      success: false,
+      error: error instanceof Error ? error.message : fallbackError,
+    });
+  });
+  return true;
+}
+
+async function withStoredAuth(
+  callback: (user: AuthUser) => Promise<ApiResponse>,
+): Promise<ApiResponse> {
+  const user = await getStoredAuth();
+  if (!user) {
+    return { success: false, error: "not_authenticated" };
+  }
+  return callback(user);
+}
+
+async function fetchFileAsDataUrl(fileUrl: string): Promise<ApiResponse> {
+  const response = await fetch(fileUrl);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+  const blob = await response.blob();
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("FileReader failed"));
+    reader.readAsDataURL(blob);
+  });
+  return { success: true, data: dataUrl };
+}
+
+let agentTargetTabId: number | null = null;
+
+async function broadcastAgentWsState(): Promise<void> {
+  const tabs = await chrome.tabs.query({});
+  await Promise.all(
+    tabs
+      .filter((tab) => typeof tab.id === "number")
+      .map(async (tab) => {
+        try {
+          await chrome.tabs.sendMessage(tab.id!, {
+            type: "AGENT_WS_STATE",
+            enabled: tab.id === agentTargetTabId,
+          });
+        } catch {
+          // ignore tabs without a ready content script
+        }
+      }),
+  );
+}
+
+async function setAgentTargetTab(tabId: number | null): Promise<void> {
+  agentTargetTabId = tabId;
+  await broadcastAgentWsState();
 }
 
 // ---------------------------------------------------------------------------
@@ -190,81 +293,218 @@ async function getAuthState(): Promise<ApiResponse> {
 // ---------------------------------------------------------------------------
 
 async function getUserSettings(): Promise<ApiResponse> {
-  const user = await getStoredAuth();
-  if (!user) {
-    return { success: false, error: "not_authenticated" };
-  }
-
-  try {
-    const resp = await fetch(
-      `${BACKEND_API}/api/profile?user_id=${encodeURIComponent(user.userId)}`,
-    );
-    if (!resp.ok) {
-      return { success: false, error: `HTTP ${resp.status}` };
+  return withStoredAuth(async (user) => {
+    try {
+      const resp = await fetch(
+        `${BACKEND_API}/api/profile?user_id=${encodeURIComponent(user.userId)}`,
+      );
+      if (!resp.ok) {
+        return { success: false, error: `HTTP ${resp.status}` };
+      }
+      const profile = (await resp.json()) as {
+        user_id: string;
+        preferences: Record<string, unknown>;
+      };
+      const prefs = profile.preferences || {};
+      const settings: UserSettings = {
+        name: (prefs.name as string) || user.name || "",
+        gender: (prefs.gender as string) || "",
+        address: (prefs.address as string) || "",
+        email: (prefs.email as string) || user.email || "",
+        phone: (prefs.phone as string) || "",
+        interests: Array.isArray(prefs.interests)
+          ? (prefs.interests as string[])
+          : [],
+      };
+      return { success: true, data: settings };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to get settings",
+      };
     }
-    const profile = (await resp.json()) as {
-      user_id: string;
-      preferences: Record<string, unknown>;
-    };
-
-    // Map from DB preferences to UserSettings shape
-    const prefs = profile.preferences || {};
-    const settings: UserSettings = {
-      name: (prefs.name as string) || user.name || "",
-      gender: (prefs.gender as string) || "",
-      address: (prefs.address as string) || "",
-      email: (prefs.email as string) || user.email || "",
-      phone: (prefs.phone as string) || "",
-      interests: Array.isArray(prefs.interests)
-        ? (prefs.interests as string[])
-        : [],
-    };
-
-    return { success: true, data: settings };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to get settings",
-    };
-  }
+  });
 }
 
 async function updateUserSettings(
   settings: UserSettings,
 ): Promise<ApiResponse> {
-  const user = await getStoredAuth();
-  if (!user) {
-    return { success: false, error: "not_authenticated" };
-  }
+  return withStoredAuth(async (user) => {
+    try {
+      const resp = await fetch(`${BACKEND_API}/api/profile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: user.userId,
+          preferences: {
+            name: settings.name,
+            gender: settings.gender,
+            address: settings.address,
+            email: settings.email,
+            phone: settings.phone,
+            interests: settings.interests,
+          },
+        }),
+      });
 
-  try {
-    const resp = await fetch(`${BACKEND_API}/api/profile`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: user.userId,
-        preferences: {
-          name: settings.name,
-          gender: settings.gender,
-          address: settings.address,
-          email: settings.email,
-          phone: settings.phone,
-          interests: settings.interests,
+      if (!resp.ok) {
+        return { success: false, error: `HTTP ${resp.status}` };
+      }
+
+      const profile = await resp.json();
+      return { success: true, data: profile };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to update settings",
+      };
+    }
+  });
+}
+
+async function getUserMemories(): Promise<ApiResponse> {
+  return withStoredAuth(async (user) => {
+    try {
+      const resp = await fetch(
+        `${BACKEND_API}/api/user-memories?user_id=${encodeURIComponent(user.userId)}`,
+      );
+      if (!resp.ok) {
+        return { success: false, error: `HTTP ${resp.status}` };
+      }
+      const payload = (await resp.json()) as {
+        memories?: UserMemory[];
+      };
+      return { success: true, data: payload.memories || [] };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to load memories",
+      };
+    }
+  });
+}
+
+async function addUserMemory(payload: {
+  field_key: string;
+  fact: string;
+}): Promise<ApiResponse> {
+  return withStoredAuth(async (user) => {
+    try {
+      const resp = await fetch(`${BACKEND_API}/api/user-memories`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: user.userId,
+          field_key: payload.field_key,
+          fact: payload.fact,
+        }),
+      });
+      if (!resp.ok) {
+        return { success: false, error: `HTTP ${resp.status}` };
+      }
+      const data = (await resp.json()) as { memories?: UserMemory[] };
+      return { success: true, data: data.memories || [] };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to add memory",
+      };
+    }
+  });
+}
+
+async function deleteUserMemory(payload: {
+  memory_id?: string;
+  field_key?: string;
+}): Promise<ApiResponse> {
+  return withStoredAuth(async (user) => {
+    const params = new URLSearchParams({ user_id: user.userId });
+    if (payload.memory_id) params.set("memory_id", payload.memory_id);
+    if (payload.field_key) params.set("field_key", payload.field_key);
+
+    try {
+      const resp = await fetch(
+        `${BACKEND_API}/api/user-memories?${params.toString()}`,
+        {
+          method: "DELETE",
         },
-      }),
-    });
+      );
+      if (!resp.ok) {
+        return { success: false, error: `HTTP ${resp.status}` };
+      }
+      const data = (await resp.json()) as { memories?: UserMemory[] };
+      return { success: true, data: data.memories || [] };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to delete memory",
+      };
+    }
+  });
+}
 
+async function getAgentMemories(): Promise<ApiResponse> {
+  try {
+    const resp = await fetch(`${BACKEND_API}/api/agent-memories`);
     if (!resp.ok) {
       return { success: false, error: `HTTP ${resp.status}` };
     }
-
-    const profile = await resp.json();
-    return { success: true, data: profile };
+    const payload = (await resp.json()) as {
+      memories?: UserMemory[];
+      agent_id?: string;
+    };
+    return {
+      success: true,
+      data: {
+        memories: payload.memories || [],
+        agentId: payload.agent_id || "",
+      },
+    };
   } catch (error) {
     return {
       success: false,
       error:
-        error instanceof Error ? error.message : "Failed to update settings",
+        error instanceof Error
+          ? error.message
+          : "Failed to load agent memories",
+    };
+  }
+}
+
+async function deleteAgentMemory(payload: {
+  memory_id: string;
+}): Promise<ApiResponse> {
+  const params = new URLSearchParams({ memory_id: payload.memory_id });
+  try {
+    const resp = await fetch(
+      `${BACKEND_API}/api/agent-memories?${params.toString()}`,
+      { method: "DELETE" },
+    );
+    if (!resp.ok) {
+      return { success: false, error: `HTTP ${resp.status}` };
+    }
+    const payloadData = (await resp.json()) as {
+      memories?: UserMemory[];
+      agent_id?: string;
+    };
+    return {
+      success: true,
+      data: {
+        memories: payloadData.memories || [],
+        agentId: payloadData.agent_id || "",
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to delete agent memory",
     };
   }
 }
@@ -472,14 +712,18 @@ async function handleApiRequest(
  */
 async function relayActionToTab(
   payload: Record<string, unknown>,
+  preferredTabId?: number,
 ): Promise<ApiResponse> {
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  const tab = tabs[0];
-  if (!tab?.id) return { success: false, error: "No active tab found" };
+  let tabId = preferredTabId || agentTargetTabId;
+  if (!tabId) {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    tabId = tabs[0]?.id ?? null;
+  }
+  if (!tabId) return { success: false, error: "No target tab found" };
 
   return new Promise((resolve) => {
     chrome.tabs.sendMessage(
-      tab.id!,
+      tabId,
       { type: "EXECUTE_ACTION", payload },
       (response) => {
         if (chrome.runtime.lastError) {
@@ -507,6 +751,10 @@ chrome.runtime.onMessage.addListener(
       | ApiRequestMessage
       | GetUserSettingsMessage
       | UpdateUserSettingsMessage
+      | GetUserMemoriesMessage
+      | AddUserMemoryMessage
+      | DeleteUserMemoryMessage
+      | GetAgentMemoriesMessage
       | ExecuteActionMessage
       | { type: string },
     _sender: chrome.runtime.MessageSender,
@@ -515,147 +763,142 @@ chrome.runtime.onMessage.addListener(
     console.log("[InterfaceAI Background] Received message:", message.type);
 
     if (message.type === "API_REQUEST") {
-      handleApiRequest((message as ApiRequestMessage).payload)
-        .then(sendResponse)
-        .catch((error) => {
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : "Unknown error",
-          });
-        });
-      return true;
+      return respondAsync(
+        sendResponse,
+        handleApiRequest((message as ApiRequestMessage).payload),
+        "Unknown error",
+      );
     }
 
     // ----- Authentication -----
     if (message.type === "GOOGLE_SIGN_IN") {
-      googleSignIn()
-        .then(sendResponse)
-        .catch((error) => {
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : "Sign-in failed",
-          });
-        });
-      return true;
+      return respondAsync(sendResponse, googleSignIn(), "Sign-in failed");
     }
 
     if (message.type === "GOOGLE_SIGN_OUT") {
-      googleSignOut()
-        .then(sendResponse)
-        .catch((error) => {
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : "Sign-out failed",
-          });
-        });
-      return true;
+      return respondAsync(sendResponse, googleSignOut(), "Sign-out failed");
     }
 
     if (message.type === "GET_AUTH_STATE") {
-      getAuthState()
-        .then(sendResponse)
-        .catch((error) => {
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : "Auth state error",
-          });
-        });
+      return respondAsync(sendResponse, getAuthState(), "Auth state error");
+    }
+
+    if (message.type === "REGISTER_AGENT_TAB") {
+      const senderTabId = _sender.tab?.id ?? null;
+      return respondAsync(
+        sendResponse,
+        setAgentTargetTab(senderTabId).then(() => ({
+          success: true,
+          data: { tabId: senderTabId },
+        })),
+        "Tab registration failed",
+      );
+    }
+
+    if (message.type === "GET_AGENT_WS_STATE") {
+      sendResponse({
+        success: true,
+        data: {
+          enabled: !!_sender.tab?.id && _sender.tab.id === agentTargetTabId,
+        },
+      });
       return true;
     }
 
     // ----- Settings -----
     if (message.type === "GET_USER_SETTINGS") {
-      getUserSettings()
-        .then(sendResponse)
-        .catch((error) => {
-          sendResponse({
-            success: false,
-            error:
-              error instanceof Error ? error.message : "Failed to get settings",
-          });
-        });
-      return true;
+      return respondAsync(
+        sendResponse,
+        getUserSettings(),
+        "Failed to get settings",
+      );
     }
 
     if (message.type === "UPDATE_USER_SETTINGS") {
-      updateUserSettings((message as UpdateUserSettingsMessage).payload)
-        .then(sendResponse)
-        .catch((error) => {
-          sendResponse({
-            success: false,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Failed to update settings",
-          });
-        });
-      return true;
+      return respondAsync(
+        sendResponse,
+        updateUserSettings((message as UpdateUserSettingsMessage).payload),
+        "Failed to update settings",
+      );
+    }
+
+    if (message.type === "GET_USER_MEMORIES") {
+      return respondAsync(
+        sendResponse,
+        getUserMemories(),
+        "Failed to get memories",
+      );
+    }
+
+    if (message.type === "ADD_USER_MEMORY") {
+      return respondAsync(
+        sendResponse,
+        addUserMemory((message as AddUserMemoryMessage).payload),
+        "Failed to add memory",
+      );
+    }
+
+    if (message.type === "DELETE_USER_MEMORY") {
+      return respondAsync(
+        sendResponse,
+        deleteUserMemory((message as DeleteUserMemoryMessage).payload),
+        "Failed to delete memory",
+      );
+    }
+
+    if (message.type === "GET_AGENT_MEMORIES") {
+      return respondAsync(
+        sendResponse,
+        getAgentMemories(),
+        "Failed to get agent memories",
+      );
+    }
+
+    if (message.type === "DELETE_AGENT_MEMORY") {
+      return respondAsync(
+        sendResponse,
+        deleteAgentMemory((message as DeleteAgentMemoryMessage).payload),
+        "Failed to delete agent memory",
+      );
     }
 
     if (message.type === "EXECUTE_ACTION") {
-      relayActionToTab((message as ExecuteActionMessage).payload)
-        .then(sendResponse)
-        .catch((error) => {
-          sendResponse({
-            success: false,
-            error:
-              error instanceof Error ? error.message : "Action relay failed",
-          });
-        });
-      return true;
+      return respondAsync(
+        sendResponse,
+        relayActionToTab(
+          (message as ExecuteActionMessage).payload,
+          _sender.tab?.id,
+        ),
+        "Action relay failed",
+      );
     }
 
     if (message.type === "FIND_AND_FETCH_FILE") {
       const { fileName } = message as { type: string; fileName: string };
-      findAndFetchFile(fileName)
-        .then(sendResponse)
-        .catch((error: unknown) =>
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : "Search failed",
-          }),
-        );
-      return true;
+      return respondAsync(
+        sendResponse,
+        findAndFetchFile(fileName),
+        "Search failed",
+      );
     }
 
     if (message.type === "FETCH_FILE") {
       const { fileUrl } = message as { type: string; fileUrl: string };
-      fetch(fileUrl)
-        .then((r) => {
-          if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-          return r.blob();
-        })
-        .then(
-          (blob) =>
-            new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = () => reject(new Error("FileReader failed"));
-              reader.readAsDataURL(blob);
-            }),
-        )
-        .then((dataUrl) => sendResponse({ success: true, data: dataUrl }))
-        .catch((error) =>
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : "Fetch failed",
-          }),
-        );
-
-      return true;
+      return respondAsync(
+        sendResponse,
+        fetchFileAsDataUrl(fileUrl),
+        "Fetch failed",
+      );
     }
 
     if (message.type === "TAKE_SCREENSHOT") {
-      chrome.tabs
-        .captureVisibleTab({ format: "png" })
-        .then((dataUrl) => sendResponse({ success: true, data: dataUrl }))
-        .catch((error) => {
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : "Screenshot failed",
-          });
-        });
-      return true;
+      return respondAsync(
+        sendResponse,
+        chrome.tabs
+          .captureVisibleTab({ format: "png" })
+          .then((dataUrl) => ({ success: true, data: dataUrl })),
+        "Screenshot failed",
+      );
     }
 
     return false;
@@ -678,6 +921,7 @@ chrome.runtime.onInstalled.addListener((details) => {
  */
 async function toggleOverlay(tab: chrome.tabs.Tab): Promise<void> {
   if (!tab.id) return;
+  await setAgentTargetTab(tab.id);
 
   try {
     await chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_OVERLAY" });

@@ -27,10 +27,6 @@ jobs:
         run: ruff check .
         working-directory: ./backend
 
-      - name: Run Ruff on playwright
-        run: ruff check .
-        working-directory: ./playwright
-
       - name: Run Ruff on vision-ai
         run: ruff check .
         working-directory: ./vision-ai

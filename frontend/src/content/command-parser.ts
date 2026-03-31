@@ -1,4 +1,9 @@
-import type { ActionResult, ActionType, PageStatus } from "./actions";
+import type {
+  ActionResult,
+  ActionType,
+  PageStatus,
+  WebsiteContent,
+} from "./actions";
 
 export type ParsedCommand =
   | { kind: "action"; action: ActionType }
@@ -38,13 +43,75 @@ export function parseCommand(raw: string): ParsedCommand {
           value: parts.slice(2).join(" "),
         },
       };
-    case "file":
-    case "upload":
+    case "check":
       return {
         kind: "action",
         action: {
-          type: "clickFileInput",
-          identifier: parts.slice(1).join(" ") || "file",
+          type: "setCheckbox",
+          identifier: parts[1] || "",
+          checked: true,
+        },
+      };
+    case "uncheck":
+      return {
+        kind: "action",
+        action: {
+          type: "setCheckbox",
+          identifier: parts[1] || "",
+          checked: false,
+        },
+      };
+    case "radio":
+      return {
+        kind: "action",
+        action: {
+          type: "selectRadio",
+          identifier: parts[1] || "",
+          value: parts.slice(2).join(" "),
+        },
+      };
+    case "file":
+    case "upload": {
+      const identifier = parts[1] || "file";
+      const target = parts.slice(2).join(" ").trim();
+      if (!target) {
+        return {
+          kind: "action",
+          action: { type: "clickFileInput", identifier },
+        };
+      }
+      const keywordMatch = target.match(/^keyword:(.+)$/i);
+      if (keywordMatch) {
+        return {
+          kind: "action",
+          action: {
+            type: "uploadFile",
+            identifier,
+            keyword: keywordMatch[1].trim(),
+          },
+        };
+      }
+      const looksLikePath =
+        /^[A-Za-z]:[\\/]/.test(target) ||
+        target.startsWith("/") ||
+        target.startsWith("./") ||
+        target.startsWith("../") ||
+        /^https?:\/\//i.test(target) ||
+        target.includes("\\");
+      return {
+        kind: "action",
+        action: looksLikePath
+          ? { type: "uploadFile", identifier, filePath: target }
+          : { type: "uploadFile", identifier, keyword: target },
+      };
+    }
+    case "upload-dom":
+      return {
+        kind: "action",
+        action: {
+          type: "uploadFileInDom",
+          identifier: parts[1] || "file",
+          keyword: parts.slice(2).join(" ").trim(),
         },
       };
     case "type":
@@ -82,6 +149,8 @@ export function parseCommand(raw: string): ParsedCommand {
       return { kind: "action", action: { type: "goForward" } };
     case "status":
       return { kind: "action", action: { type: "getPageStatus" } };
+    case "content":
+      return { kind: "action", action: { type: "getWebsiteContent" } };
     case "screenshot":
       return { kind: "screenshot" };
     case "result":
@@ -98,12 +167,26 @@ export function parseCommand(raw: string): ParsedCommand {
 }
 
 export function summarizeResult(
-  obj: ActionResult | PageStatus | Record<string, unknown>,
+  obj: ActionResult | PageStatus | WebsiteContent | Record<string, unknown>,
 ): string {
-  if ("dataUrl" in obj && obj.dataUrl) return "Screenshot captured";
+  const payload =
+    "data" in obj && obj.data && typeof obj.data === "object"
+      ? (obj.data as
+          | ActionResult
+          | PageStatus
+          | WebsiteContent
+          | Record<string, unknown>)
+      : obj;
 
-  if ("title" in obj && "url" in obj && "scroll" in obj) {
-    const status = obj as PageStatus;
+  if ("paragraphs" in payload && "fullText" in payload && "title" in payload) {
+    const content = payload as WebsiteContent;
+    return `Content: "${content.title}" | ${content.paragraphs.length} blocks extracted`;
+  }
+
+  if ("dataUrl" in payload && payload.dataUrl) return "Screenshot captured";
+
+  if ("title" in payload && "url" in payload && "scroll" in payload) {
+    const status = payload as PageStatus;
     const parts = [`Page: "${status.title}"`];
     parts.push(
       `${status.links?.length ?? 0} links`,
@@ -117,15 +200,22 @@ export function summarizeResult(
       parts.push(`${status.selects.length} dropdowns`);
     if (status.fileInputs?.length)
       parts.push(`${status.fileInputs.length} file inputs`);
+    if (status.paragraphs?.length)
+      parts.push(`${status.paragraphs.length} paragraphs`);
     return parts.join(" | ");
   }
 
-  if ("text" in obj && typeof obj.text === "string" && obj.text)
-    return obj.text;
-  if ("url" in obj && typeof obj.url === "string" && obj.url) return obj.url;
-  if ("name" in obj && typeof obj.name === "string" && obj.name)
-    return `Field: ${obj.name}`;
-  if ("scrolledBy" in obj && obj.scrolledBy != null)
-    return `Scrolled ${String(obj.scrolledBy)}px`;
-  return JSON.stringify(obj).substring(0, 160);
+  if ("text" in payload && typeof payload.text === "string" && payload.text)
+    return payload.text;
+  if ("url" in payload && typeof payload.url === "string" && payload.url)
+    return payload.url;
+  if ("name" in payload && typeof payload.name === "string" && payload.name)
+    return `Field: ${payload.name}`;
+  if ("fileName" in payload && typeof payload.fileName === "string")
+    return `Uploaded: ${payload.fileName}`;
+  if ("action" in payload && payload.action === "dom-file-pick")
+    return `Picked in-page file item: ${String(payload.text || payload.keyword || "")}`;
+  if ("scrolledBy" in payload && payload.scrolledBy != null)
+    return `Scrolled ${String(payload.scrolledBy)}px`;
+  return JSON.stringify(payload).substring(0, 160);
 }

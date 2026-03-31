@@ -15,7 +15,7 @@ _loop: asyncio.AbstractEventLoop | None = None
 _log_queue: 'asyncio.Queue[dict[str, Any]] | None' = None
 
 RECONNECT_WAIT_SECONDS = 12.0
-COMMAND_TIMEOUT_SECONDS = 20.0
+COMMAND_TIMEOUT_SECONDS = 8.0
 
 
 async def _wait_for_connection(timeout_seconds: float = RECONNECT_WAIT_SECONDS) -> bool:
@@ -99,7 +99,10 @@ async def _send_command(
         return await asyncio.wait_for(future, timeout=COMMAND_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
         _pending.pop(request_id, None)
-        return {"success": False, "error": "Timeout"}
+        return {
+            "success": False,
+            "error": "Extension command timeout (no browser response)",
+        }
 
 
 def is_server_running() -> bool:
