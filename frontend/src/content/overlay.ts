@@ -253,26 +253,7 @@ export class InterfaceAIOverlay {
     renderSignIn(this.shadowRoot, () => this.handleSignIn());
   }
 
-  private async loadAndRenderProfile(): Promise<void> {
-    const settings = await fetchUserSettings();
-    const memories = this.authUser?.userId
-      ? await getCachedUserMemories(this.authUser.userId)
-      : null;
-
-    if (!settings) {
-      const settingsContent =
-        this.shadowRoot?.getElementById("settings-content");
-      if (settingsContent) {
-        settingsContent.innerHTML = `
-          <div class="settings-loading">
-            <span style="color: rgba(239, 68, 68, 0.8);">Failed to load settings</span>
-          </div>
-        `;
-      }
-      return;
-    }
-
-    this.userMemories = memories || [];
+  private renderProfileView(settings: UserSettings): void {
     renderSettings(
       this.shadowRoot,
       settings,
@@ -300,71 +281,14 @@ export class InterfaceAIOverlay {
     );
   }
 
-  private async handleSettingsUpdate(
-    updatedSettings: UserSettings,
-  ): Promise<void> {
-    const success = await updateUserSettings(updatedSettings);
-    if (!success) return;
-
-    renderSettings(
-      this.shadowRoot,
-      updatedSettings,
-      this.userMemories,
-      this.authUser,
-      () => this.handleSignOut(),
-    );
-    setupSettingsListeners(
-      this.shadowRoot,
-      updatedSettings,
-      this.userMemories,
-      async (settings) => {
-        await this.handleSettingsUpdate(settings);
-      },
-      async (fieldKey, fact) => {
-        await this.handleAddMemory(fieldKey, fact);
-      },
-      async (memory) => {
-        await this.handleDeleteMemory(memory);
-      },
-      async () => {
-        await this.reloadUserMemories();
-      },
-    );
-  }
-
-  private async handleAddMemory(fieldKey: string, fact: string): Promise<void> {
-    const memories = await addUserMemory(fieldKey, fact);
-    if (!memories) return;
+  private async setUserMemories(memories: UserMemory[]): Promise<void> {
     this.userMemories = memories;
     if (this.authUser?.userId) {
       await setCachedUserMemories(this.authUser.userId, memories);
     }
-    await this.loadAndRenderProfile();
   }
 
-  private async handleDeleteMemory(memory: UserMemory): Promise<void> {
-    const memories = await deleteUserMemory(memory);
-    if (!memories) return;
-    this.userMemories = memories;
-    if (this.authUser?.userId) {
-      await setCachedUserMemories(this.authUser.userId, memories);
-    }
-    await this.loadAndRenderProfile();
-  }
-
-  private async reloadUserMemories(): Promise<void> {
-    if (!this.authUser?.userId) return;
-    const memories = await fetchUserMemories();
-    if (!memories) return;
-    this.userMemories = memories;
-    await setCachedUserMemories(this.authUser.userId, memories);
-    await this.loadAndRenderProfile();
-  }
-
-  private async loadAndRenderAgentMemories(): Promise<void> {
-    const cached = await getCachedAgentMemories();
-    this.agentMemories = cached?.memories || [];
-    this.agentId = cached?.agentId || "";
+  private renderAgentMemoriesView(): void {
     renderAgentMemoriesPage(
       this.shadowRoot,
       this.agentMemories,
@@ -387,12 +311,79 @@ export class InterfaceAIOverlay {
     );
   }
 
-  private async reloadAgentMemories(): Promise<void> {
-    const payload = await fetchAgentMemories();
-    if (!payload) return;
+  private async setAgentMemories(payload: {
+    memories: UserMemory[];
+    agentId: string;
+  }): Promise<void> {
     this.agentMemories = payload.memories;
     this.agentId = payload.agentId;
     await setCachedAgentMemories(payload);
+  }
+
+  private async loadAndRenderProfile(): Promise<void> {
+    const settings = await fetchUserSettings();
+    const memories = this.authUser?.userId
+      ? await getCachedUserMemories(this.authUser.userId)
+      : null;
+
+    if (!settings) {
+      const settingsContent =
+        this.shadowRoot?.getElementById("settings-content");
+      if (settingsContent) {
+        settingsContent.innerHTML = `
+          <div class="settings-loading">
+            <span style="color: rgba(239, 68, 68, 0.8);">Failed to load settings</span>
+          </div>
+        `;
+      }
+      return;
+    }
+
+    this.userMemories = memories || [];
+    this.renderProfileView(settings);
+  }
+
+  private async handleSettingsUpdate(
+    updatedSettings: UserSettings,
+  ): Promise<void> {
+    const success = await updateUserSettings(updatedSettings);
+    if (!success) return;
+    this.renderProfileView(updatedSettings);
+  }
+
+  private async handleAddMemory(fieldKey: string, fact: string): Promise<void> {
+    const memories = await addUserMemory(fieldKey, fact);
+    if (!memories) return;
+    await this.setUserMemories(memories);
+    await this.loadAndRenderProfile();
+  }
+
+  private async handleDeleteMemory(memory: UserMemory): Promise<void> {
+    const memories = await deleteUserMemory(memory);
+    if (!memories) return;
+    await this.setUserMemories(memories);
+    await this.loadAndRenderProfile();
+  }
+
+  private async reloadUserMemories(): Promise<void> {
+    if (!this.authUser?.userId) return;
+    const memories = await fetchUserMemories();
+    if (!memories) return;
+    await this.setUserMemories(memories);
+    await this.loadAndRenderProfile();
+  }
+
+  private async loadAndRenderAgentMemories(): Promise<void> {
+    const cached = await getCachedAgentMemories();
+    this.agentMemories = cached?.memories || [];
+    this.agentId = cached?.agentId || "";
+    this.renderAgentMemoriesView();
+  }
+
+  private async reloadAgentMemories(): Promise<void> {
+    const payload = await fetchAgentMemories();
+    if (!payload) return;
+    await this.setAgentMemories(payload);
     await this.loadAndRenderAgentMemories();
   }
 
@@ -414,9 +405,7 @@ export class InterfaceAIOverlay {
     if (!this.hasAgentAdminAccess) return;
     const payload = await deleteAgentMemory(memory);
     if (!payload) return;
-    this.agentMemories = payload.memories;
-    this.agentId = payload.agentId;
-    await setCachedAgentMemories(payload);
+    await this.setAgentMemories(payload);
     await this.loadAndRenderAgentMemories();
   }
 

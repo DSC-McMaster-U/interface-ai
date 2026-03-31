@@ -468,6 +468,25 @@ function renderMemoryList(
     .join("");
 }
 
+function setupMemoryDeleteListeners(
+  shadowRoot: ShadowRoot | null,
+  selector: string,
+  resolveMemory: (item: Element) => UserMemory | undefined,
+  confirmPrefix: string,
+  onDelete: (memory: UserMemory) => Promise<void>,
+): void {
+  const memoryItems = shadowRoot?.querySelectorAll(selector);
+  memoryItems?.forEach((item) => {
+    item.addEventListener("click", async () => {
+      const memory = resolveMemory(item);
+      if (!memory) return;
+      const confirmed = confirm(`${confirmPrefix} "${memory.fact}"?`);
+      if (!confirmed) return;
+      await onDelete(memory);
+    });
+  });
+}
+
 /**
  * Render the sign-in screen (when not authenticated)
  */
@@ -663,19 +682,16 @@ export function setupAgentMemoriesListeners(
 
   if (!isAdmin) return;
 
-  const memoryItems = shadowRoot?.querySelectorAll(
+  setupMemoryDeleteListeners(
+    shadowRoot,
     "#agent-memories-container .memory-item",
-  );
-  memoryItems?.forEach((item) => {
-    item.addEventListener("click", async () => {
+    (item) => {
       const memoryId = item.getAttribute("data-memory-id") || "";
-      const memory = currentMemories.find((entry) => entry.id === memoryId);
-      if (!memory) return;
-      const confirmed = confirm(`Delete agent memory "${memory.fact}"?`);
-      if (!confirmed) return;
-      await onDelete(memory);
-    });
-  });
+      return currentMemories.find((entry) => entry.id === memoryId);
+    },
+    "Delete agent memory",
+    onDelete,
+  );
 }
 
 /**
@@ -707,22 +723,19 @@ export function setupSettingsListeners(
     });
   });
 
-  const memoryItems = shadowRoot?.querySelectorAll(".memory-item");
-  memoryItems?.forEach((item) => {
-    item.addEventListener("click", async () => {
+  setupMemoryDeleteListeners(
+    shadowRoot,
+    ".memory-item",
+    (item) => {
       const memoryId = item.getAttribute("data-memory-id") || "";
       const fieldKey = item.getAttribute("data-field-key") || "";
-      const memory = currentMemories.find(
+      return currentMemories.find(
         (entry) => entry.id === memoryId && entry.field_key === fieldKey,
       );
-      if (!memory) return;
-
-      const confirmed = confirm(`Delete memory "${memory.fact}"?`);
-      if (!confirmed) return;
-
-      await onDeleteMemory(memory);
-    });
-  });
+    },
+    "Delete memory",
+    onDeleteMemory,
+  );
 
   const addBtn = shadowRoot?.getElementById("add-memory-btn");
   addBtn?.addEventListener("click", async () => {
@@ -755,6 +768,57 @@ export function setupSettingsListeners(
 export interface SignInResult {
   user: AuthUser | null;
   error?: string;
+}
+
+type AgentMemoriesPayload = {
+  agentId: string;
+  memories: UserMemory[];
+};
+
+function sendMessage<T>(
+  message: unknown,
+  options: {
+    runtimeError: string;
+    failureError: string;
+    mapResponse: (response: ApiResponse) => T | null;
+  },
+): Promise<T | null> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(message, (response: ApiResponse) => {
+      if (chrome.runtime.lastError) {
+        console.error(options.runtimeError, chrome.runtime.lastError);
+        resolve(null);
+        return;
+      }
+      const mapped = options.mapResponse(response);
+      if (mapped !== null) {
+        resolve(mapped);
+        return;
+      }
+      console.error(options.failureError, response.error);
+      resolve(null);
+    });
+  });
+}
+
+function asUserMemories(response: ApiResponse): UserMemory[] | null {
+  return response.success && Array.isArray(response.data)
+    ? (response.data as UserMemory[])
+    : null;
+}
+
+function asAgentMemoriesPayload(response: ApiResponse): AgentMemoriesPayload | null {
+  if (!(response.success && response.data && typeof response.data === "object")) {
+    return null;
+  }
+  const data = response.data as {
+    agentId?: string;
+    memories?: UserMemory[];
+  };
+  return {
+    agentId: data.agentId || "",
+    memories: Array.isArray(data.memories) ? data.memories : [],
+  };
 }
 
 /**
@@ -875,26 +939,11 @@ export async function updateUserSettings(
 }
 
 export async function fetchUserMemories(): Promise<UserMemory[] | null> {
-  return new Promise((resolve) => {
-    const message: GetUserMemoriesMessage = { type: "GET_USER_MEMORIES" };
-
-    chrome.runtime.sendMessage(message, (response: ApiResponse) => {
-      if (chrome.runtime.lastError) {
-        console.error(
-          "[Settings] Error fetching user memories:",
-          chrome.runtime.lastError,
-        );
-        resolve(null);
-      } else if (response.success && Array.isArray(response.data)) {
-        resolve(response.data as UserMemory[]);
-      } else {
-        console.error(
-          "[Settings] Failed to fetch user memories:",
-          response.error,
-        );
-        resolve(null);
-      }
-    });
+  const message: GetUserMemoriesMessage = { type: "GET_USER_MEMORIES" };
+  return sendMessage(message, {
+    runtimeError: "[Settings] Error fetching user memories:",
+    failureError: "[Settings] Failed to fetch user memories:",
+    mapResponse: asUserMemories,
   });
 }
 
@@ -902,61 +951,34 @@ export async function addUserMemory(
   fieldKey: string,
   fact: string,
 ): Promise<UserMemory[] | null> {
-  return new Promise((resolve) => {
-    const message: AddUserMemoryMessage = {
-      type: "ADD_USER_MEMORY",
-      payload: {
-        field_key: fieldKey,
-        fact,
-      },
-    };
-
-    chrome.runtime.sendMessage(message, (response: ApiResponse) => {
-      if (chrome.runtime.lastError) {
-        console.error(
-          "[Settings] Error adding user memory:",
-          chrome.runtime.lastError,
-        );
-        resolve(null);
-      } else if (response.success && Array.isArray(response.data)) {
-        resolve(response.data as UserMemory[]);
-      } else {
-        console.error("[Settings] Failed to add user memory:", response.error);
-        resolve(null);
-      }
-    });
+  const message: AddUserMemoryMessage = {
+    type: "ADD_USER_MEMORY",
+    payload: {
+      field_key: fieldKey,
+      fact,
+    },
+  };
+  return sendMessage(message, {
+    runtimeError: "[Settings] Error adding user memory:",
+    failureError: "[Settings] Failed to add user memory:",
+    mapResponse: asUserMemories,
   });
 }
 
 export async function deleteUserMemory(
   memory: UserMemory,
 ): Promise<UserMemory[] | null> {
-  return new Promise((resolve) => {
-    const message: DeleteUserMemoryMessage = {
-      type: "DELETE_USER_MEMORY",
-      payload: {
-        memory_id: memory.id,
-        field_key: memory.field_key,
-      },
-    };
-
-    chrome.runtime.sendMessage(message, (response: ApiResponse) => {
-      if (chrome.runtime.lastError) {
-        console.error(
-          "[Settings] Error deleting user memory:",
-          chrome.runtime.lastError,
-        );
-        resolve(null);
-      } else if (response.success && Array.isArray(response.data)) {
-        resolve(response.data as UserMemory[]);
-      } else {
-        console.error(
-          "[Settings] Failed to delete user memory:",
-          response.error,
-        );
-        resolve(null);
-      }
-    });
+  const message: DeleteUserMemoryMessage = {
+    type: "DELETE_USER_MEMORY",
+    payload: {
+      memory_id: memory.id,
+      field_key: memory.field_key,
+    },
+  };
+  return sendMessage(message, {
+    runtimeError: "[Settings] Error deleting user memory:",
+    failureError: "[Settings] Failed to delete user memory:",
+    mapResponse: asUserMemories,
   });
 }
 
@@ -1026,38 +1048,10 @@ export async function fetchAgentMemories(): Promise<{
   agentId: string;
   memories: UserMemory[];
 } | null> {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage(
-      { type: "GET_AGENT_MEMORIES" },
-      (response: ApiResponse) => {
-        if (chrome.runtime.lastError) {
-          console.error(
-            "[Settings] Error fetching agent memories:",
-            chrome.runtime.lastError,
-          );
-          resolve(null);
-        } else if (
-          response.success &&
-          response.data &&
-          typeof response.data === "object"
-        ) {
-          const data = response.data as {
-            agentId?: string;
-            memories?: UserMemory[];
-          };
-          resolve({
-            agentId: data.agentId || "",
-            memories: Array.isArray(data.memories) ? data.memories : [],
-          });
-        } else {
-          console.error(
-            "[Settings] Failed to fetch agent memories:",
-            response.error,
-          );
-          resolve(null);
-        }
-      },
-    );
+  return sendMessage({ type: "GET_AGENT_MEMORIES" }, {
+    runtimeError: "[Settings] Error fetching agent memories:",
+    failureError: "[Settings] Failed to fetch agent memories:",
+    mapResponse: asAgentMemoriesPayload,
   });
 }
 
@@ -1067,41 +1061,15 @@ export async function deleteAgentMemory(
   agentId: string;
   memories: UserMemory[];
 } | null> {
-  return new Promise((resolve) => {
-    const message: DeleteAgentMemoryMessage = {
-      type: "DELETE_AGENT_MEMORY",
-      payload: {
-        memory_id: memory.id,
-      },
-    };
-
-    chrome.runtime.sendMessage(message, (response: ApiResponse) => {
-      if (chrome.runtime.lastError) {
-        console.error(
-          "[Settings] Error deleting agent memory:",
-          chrome.runtime.lastError,
-        );
-        resolve(null);
-      } else if (
-        response.success &&
-        response.data &&
-        typeof response.data === "object"
-      ) {
-        const data = response.data as {
-          agentId?: string;
-          memories?: UserMemory[];
-        };
-        resolve({
-          agentId: data.agentId || "",
-          memories: Array.isArray(data.memories) ? data.memories : [],
-        });
-      } else {
-        console.error(
-          "[Settings] Failed to delete agent memory:",
-          response.error,
-        );
-        resolve(null);
-      }
-    });
+  const message: DeleteAgentMemoryMessage = {
+    type: "DELETE_AGENT_MEMORY",
+    payload: {
+      memory_id: memory.id,
+    },
+  };
+  return sendMessage(message, {
+    runtimeError: "[Settings] Error deleting agent memory:",
+    failureError: "[Settings] Failed to delete agent memory:",
+    mapResponse: asAgentMemoriesPayload,
   });
 }

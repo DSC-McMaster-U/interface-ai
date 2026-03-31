@@ -6,7 +6,7 @@ from flask import Flask, Response, jsonify, request, stream_with_context
 from flask_cors import CORS
 
 from app.agent_execution import session
-from app.continuous_learning import BrowserMemoryStore
+from app.continuous_learning import Mem0MemoryStore
 from app.db import get_profile, init_tables, normalize_user_id, upsert_profile
 from app.extension_automation import (
     is_server_running,
@@ -119,8 +119,30 @@ def update_user_profile():
     return jsonify(profile), 200
 
 
-def _memory_store() -> BrowserMemoryStore:
-    return BrowserMemoryStore(agent_id=session.get_agent_id())
+def _user_memories_response(
+    user_id: str,
+    *,
+    deleted_count: int | None = None,
+):
+    memories = Mem0MemoryStore(agent_id=session.get_agent_id()).list_user_memories(
+        user_id=user_id,
+        limit=200,
+    )
+    payload = {"user_id": user_id, "memories": memories}
+    if deleted_count is not None:
+        payload["deleted_count"] = deleted_count
+    return jsonify(payload), 200
+
+
+def _agent_memories_response(*, deleted_count: int | None = None):
+    store = Mem0MemoryStore(agent_id=session.get_agent_id())
+    payload = {
+        "agent_id": session.get_agent_id(),
+        "memories": store.list_agent_memories(limit=200),
+    }
+    if deleted_count is not None:
+        payload["deleted_count"] = deleted_count
+    return jsonify(payload), 200
 
 
 @app.get("/api/user-memories")
@@ -128,9 +150,7 @@ def get_user_memories():
     user_id = request.args.get("user_id", "").strip()
     if not user_id:
         return jsonify({"error": "missing user_id"}), 400
-
-    memories = _memory_store().list_user_memories(user_id=user_id, limit=200)
-    return jsonify({"user_id": user_id, "memories": memories}), 200
+    return _user_memories_response(user_id)
 
 
 @app.post("/api/user-memories")
@@ -146,14 +166,13 @@ def add_user_memory():
     if not fact:
         return jsonify({"error": "missing fact"}), 400
 
-    _memory_store().add_user_memory(
+    Mem0MemoryStore(agent_id=session.get_agent_id()).add_user_memory(
         user_id=user_id,
         field_key=field_key,
         fact=fact,
         source="settings_ui",
     )
-    memories = _memory_store().list_user_memories(user_id=user_id, limit=200)
-    return jsonify({"user_id": user_id, "memories": memories}), 200
+    return _user_memories_response(user_id)
 
 
 @app.delete("/api/user-memories")
@@ -166,31 +185,15 @@ def delete_user_memory():
     if not field_key and not memory_id:
         return jsonify({"error": "missing field_key or memory_id"}), 400
 
-    deleted_count = _memory_store().delete_user_memory(
-        user_id=user_id,
-        field_key=field_key,
-        memory_id=memory_id,
-    )
-    memories = _memory_store().list_user_memories(user_id=user_id, limit=200)
-    return jsonify(
-        {
-            "user_id": user_id,
-            "deleted_count": deleted_count,
-            "memories": memories,
-        }
-    ), 200
+    deleted_count = Mem0MemoryStore(
+        agent_id=session.get_agent_id()
+    ).delete_user_memory(user_id=user_id, field_key=field_key, memory_id=memory_id)
+    return _user_memories_response(user_id, deleted_count=deleted_count)
 
 
 @app.get("/api/agent-memories")
 def get_agent_memories():
-    store = _memory_store()
-    memories = store.list_agent_memories(limit=200)
-    return jsonify(
-        {
-            "agent_id": session.get_agent_id(),
-            "memories": memories,
-        }
-    ), 200
+    return _agent_memories_response()
 
 
 @app.delete("/api/agent-memories")
@@ -199,16 +202,12 @@ def delete_agent_memory():
     if not memory_id:
         return jsonify({"error": "missing memory_id"}), 400
 
-    store = _memory_store()
-    deleted_count = store.delete_agent_memory(memory_id=memory_id)
-    memories = store.list_agent_memories(limit=200)
-    return jsonify(
-        {
-            "agent_id": session.get_agent_id(),
-            "deleted_count": deleted_count,
-            "memories": memories,
-        }
-    ), 200
+    deleted_count = Mem0MemoryStore(
+        agent_id=session.get_agent_id()
+    ).delete_agent_memory(
+        memory_id=memory_id,
+    )
+    return _agent_memories_response(deleted_count=deleted_count)
 
 
 @app.get("/api/extension/health")

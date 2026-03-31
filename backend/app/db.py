@@ -4,7 +4,6 @@ PostgreSQL database connection and profile helpers.
 Uses psycopg (v3) connection pool.
 """
 
-import os
 import json
 import logging
 import uuid
@@ -25,10 +24,9 @@ _HARDCODED_DB_NAME = "interfaceai-db"
 _HARDCODED_DB_USER = "postgres"
 _HARDCODED_DB_PASSWORD = "=JVO7L6=@>qYO$m,"
 _HARDCODED_DB_SSLMODE = "require"
-_LOCAL_DOCKER_DB_URL = "postgresql://user:password@postgres:5432/interfaceai"
 
 
-def _hardcoded_db_url() -> str:
+def get_database_url() -> str:
     encoded_password = quote(_HARDCODED_DB_PASSWORD, safe="")
     return (
         f"postgresql://{_HARDCODED_DB_USER}:{encoded_password}"
@@ -37,18 +35,7 @@ def _hardcoded_db_url() -> str:
     )
 
 
-def _resolve_database_url() -> str:
-    memory_db_url = os.getenv("MEMORY_DATABASE_URL", "").strip()
-    direct_db_url = os.getenv("DATABASE_URL", "").strip()
-
-    if memory_db_url:
-        return memory_db_url
-    if direct_db_url and direct_db_url != _LOCAL_DOCKER_DB_URL:
-        return direct_db_url
-    return _hardcoded_db_url()
-
-
-DATABASE_URL = _resolve_database_url()
+DATABASE_URL = get_database_url()
 
 _pool: psycopg.Connection | None = None
 
@@ -299,50 +286,3 @@ def upsert_profile(user_id: str, preferences: dict[str, Any]) -> dict[str, Any]:
 
     logger.warning("profiles table schema is not recognized; returning in-memory profile")
     return {"user_id": normalized_user_id, "preferences": normalized_preferences}
-
-
-def update_profile_field(user_id: str, key: str, value: Any) -> dict[str, Any]:
-    """Set a single key inside the preferences JSONB for *user_id*."""
-    if _table_has_column("profiles", "field_key") and _table_has_column(
-        "profiles", "fact"
-    ):
-        return upsert_profile(user_id, {str(key).strip(): value})
-
-    # Ensure the row exists first
-    get_or_create_profile(user_id)
-    with get_cursor() as cur:
-        cur.execute(
-            """
-            UPDATE profiles
-            SET preferences = jsonb_set(
-                    COALESCE(preferences, '{}'::jsonb),
-                    %s::text[],
-                    %s::jsonb
-                ),
-                updated_at = now()
-            WHERE user_id = %s
-            RETURNING *;
-            """,
-            ([key], json.dumps(value), user_id),
-        )
-        row = cur.fetchone()
-        return dict(row) if row else get_profile(user_id)
-
-
-def get_or_create_profile(user_id: str) -> dict[str, Any]:
-    """Return existing profile or create a blank one."""
-    if _table_has_column("profiles", "field_key") and _table_has_column(
-        "profiles", "fact"
-    ):
-        return get_profile(user_id)
-
-    with get_cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO profiles (user_id, preferences)
-            VALUES (%s, '{}'::jsonb)
-            ON CONFLICT (user_id) DO NOTHING;
-            """,
-            (user_id,),
-        )
-    return get_profile(user_id)

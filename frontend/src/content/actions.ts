@@ -107,7 +107,7 @@ function setTextLikeElementValue(
     el.dispatchEvent(new Event("change", { bubbles: true }));
     return {
       success: true,
-      name: el.getAttribute("name") || el.id || el.getAttribute("placeholder") || "text-field",
+      name: describeTextLikeElement(el),
       tag: el.tagName,
     };
   }
@@ -120,9 +120,46 @@ function setTextLikeElementValue(
   el.dispatchEvent(new Event("change", { bubbles: true }));
   return {
     success: true,
-    name: el.getAttribute("aria-label") || el.id || el.getAttribute("role") || "editor",
+    name: describeTextLikeElement(el),
     tag: el.tagName,
   };
+}
+
+function describeTextLikeElement(
+  el: HTMLInputElement | HTMLTextAreaElement | HTMLElement,
+): string {
+  return (
+    el.getAttribute("name") ||
+    el.id ||
+    el.getAttribute("placeholder") ||
+    el.getAttribute("aria-label") ||
+    el.getAttribute("role") ||
+    "text-field"
+  );
+}
+
+function dispatchEnterSequence(target: HTMLElement): void {
+  target.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "Enter",
+      code: "Enter",
+      bubbles: true,
+    }),
+  );
+  target.dispatchEvent(
+    new KeyboardEvent("keypress", {
+      key: "Enter",
+      code: "Enter",
+      bubbles: true,
+    }),
+  );
+  target.dispatchEvent(
+    new KeyboardEvent("keyup", {
+      key: "Enter",
+      code: "Enter",
+      bubbles: true,
+    }),
+  );
 }
 
 // -------------------- ACTION FUNCTIONS --------------------
@@ -224,70 +261,13 @@ export function clickFirstSearchResult(): ActionResult {
 export function pressEnter(): ActionResult {
   const active = document.activeElement as HTMLElement | null;
   if (active) {
-    active.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "Enter",
-        code: "Enter",
-        bubbles: true,
-      }),
-    );
-    active.dispatchEvent(
-      new KeyboardEvent("keypress", {
-        key: "Enter",
-        code: "Enter",
-        bubbles: true,
-      }),
-    );
-    active.dispatchEvent(
-      new KeyboardEvent("keyup", {
-        key: "Enter",
-        code: "Enter",
-        bubbles: true,
-      }),
-    );
+    dispatchEnterSequence(active);
   }
   return { success: true };
 }
 
 export function pressEnterOn(identifier: string): ActionResult {
-  const lower = identifier.toLowerCase();
-
-  let input: HTMLInputElement | HTMLTextAreaElement | null =
-    document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-      `input[name="${identifier}" i], textarea[name="${identifier}" i]`,
-    ) ||
-    document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-      `#${CSS.escape(identifier)}`,
-    ) ||
-    document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-      `input[placeholder*="${identifier}" i], textarea[placeholder*="${identifier}" i]`,
-    ) ||
-    document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-      `input[aria-label*="${identifier}" i], textarea[aria-label*="${identifier}" i]`,
-    );
-
-  if (!input) {
-    for (const label of document.querySelectorAll("label")) {
-      if (label.textContent?.toLowerCase().includes(lower)) {
-        const forAttr = label.getAttribute("for");
-        input = forAttr
-          ? (document.getElementById(forAttr) as HTMLInputElement | null)
-          : label.querySelector("input, textarea");
-        if (input) break;
-      }
-    }
-  }
-
-  if (!input) {
-    const typeMap: Record<string, string> = {
-      search: 'input[type="search"], input[name*="search" i]',
-      email: 'input[type="email"]',
-      password: 'input[type="password"]',
-    };
-    if (typeMap[lower]) {
-      input = document.querySelector(typeMap[lower]);
-    }
-  }
+  const input = resolveTextLikeElement(identifier);
 
   if (!input) {
     return {
@@ -297,24 +277,8 @@ export function pressEnterOn(identifier: string): ActionResult {
   }
 
   input.focus();
-  input.dispatchEvent(
-    new KeyboardEvent("keydown", {
-      key: "Enter",
-      code: "Enter",
-      bubbles: true,
-    }),
-  );
-  input.dispatchEvent(
-    new KeyboardEvent("keypress", {
-      key: "Enter",
-      code: "Enter",
-      bubbles: true,
-    }),
-  );
-  input.dispatchEvent(
-    new KeyboardEvent("keyup", { key: "Enter", code: "Enter", bubbles: true }),
-  );
-  return { success: true, name: input.name || input.id || input.placeholder };
+  dispatchEnterSequence(input);
+  return { success: true, name: describeTextLikeElement(input) };
 }
 
 export function typeText(text: string): ActionResult {
@@ -541,38 +505,7 @@ export function selectRadio(identifier: string, value: string): ActionResult {
 }
 
 export function clickFileInput(identifier: string): ActionResult {
-  const lower = identifier.toLowerCase();
-
-  let input: HTMLInputElement | null =
-    document.querySelector<HTMLInputElement>(
-      `input[type="file"][name="${identifier}" i]`,
-    ) ||
-    document.querySelector<HTMLInputElement>(
-      `input[type="file"]#${CSS.escape(identifier)}`,
-    ) ||
-    document.querySelector<HTMLInputElement>(
-      `input[type="file"][aria-label*="${identifier}" i]`,
-    );
-
-  if (!input) {
-    for (const label of document.querySelectorAll("label")) {
-      if (label.textContent?.toLowerCase().includes(lower)) {
-        const forAttr = label.getAttribute("for");
-        const candidate = forAttr
-          ? (document.getElementById(forAttr) as HTMLInputElement | null)
-          : label.querySelector<HTMLInputElement>('input[type="file"]');
-        if (candidate?.type === "file") {
-          input = candidate;
-          break;
-        }
-      }
-    }
-  }
-
-  // Fall back to any file input on the page
-  if (!input) {
-    input = document.querySelector<HTMLInputElement>('input[type="file"]');
-  }
+  const input = resolveFileInput(identifier);
 
   if (!input) {
     return {

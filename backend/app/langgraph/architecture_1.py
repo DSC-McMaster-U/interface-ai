@@ -22,7 +22,7 @@ from app.langgraph.utilities import (
     parse_verdict_json,
 )
 from app.continuous_learning import (
-    BrowserMemoryStore,
+    Mem0MemoryStore,
     extract_domain_from_status,
     format_memory_lines,
     infer_target_domain,
@@ -47,7 +47,7 @@ def run_architecture_1(
     get_runtime_feedback: Callable[[], list[str]],
     stop_event: threading.Event,
 ) -> None:
-    memory_store = BrowserMemoryStore(agent_id=agent_id)
+    memory_store = Mem0MemoryStore(agent_id=agent_id)
     action_trace: list[dict[str, Any]] = []
     user_inputs: list[dict[str, str]] = []
     agent_updates: list[str] = []
