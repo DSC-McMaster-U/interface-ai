@@ -38,13 +38,11 @@ class AgentSession:
         self._thread: threading.Thread | None = None
         self._goal: str = ""
         self._last_stopped_goal: str = ""
-        self._require_approval: bool = True
+        self._require_approval: bool = False
         self._queued_goal: str | None = None
         self._restart_watcher_active: bool = False
-        self._user_id: str | None = None
-
-    def set_user_id(self, user_id: str | None) -> None:
-        self._user_id = user_id
+        self._user_id: str = "local-user"
+        self._agent_id: str = os.getenv("MEM0_AGENT_ID", "").strip() or "browser-agent"
 
     def is_running(self) -> bool:
         return bool(self._thread and self._thread.is_alive())
@@ -65,6 +63,26 @@ class AgentSession:
 
     def get_require_approval(self) -> bool:
         return self._require_approval
+
+    def set_user_id(self, user_id: str) -> None:
+        normalized = (user_id or "").strip()
+        if not normalized:
+            raise ValueError("user_id cannot be empty")
+        self._user_id = normalized
+        self._emit(f"Active user id set to: {self._user_id}")
+
+    def get_user_id(self) -> str:
+        return self._user_id
+
+    def set_agent_id(self, agent_id: str) -> None:
+        normalized = (agent_id or "").strip()
+        if not normalized:
+            raise ValueError("agent_id cannot be empty")
+        self._agent_id = normalized
+        self._emit(f"Active agent id set to: {self._agent_id}")
+
+    def get_agent_id(self) -> str:
+        return self._agent_id
 
     def start(self, goal: str, *, restart_if_running: bool = False) -> None:
         old_thread: threading.Thread | None = None
@@ -357,9 +375,18 @@ class AgentSession:
             compact = json.dumps(result, ensure_ascii=True)
         except Exception:
             compact = str(result)
+        if action != "getPageStatus" and len(compact) > 6000:
+            compact = compact[:6000] + "...(truncated)"
         self._emit(f"[tool:result] {action} {compact}")
-        if result.get("error") == "WebSocket server not running":
-            self._emit("Browser extension WS server not running. Agent stopped.")
+        error_text = str(result.get("error") or "")
+        if (
+            error_text == "WebSocket server not running"
+            or "No browser connected" in error_text
+            or "command timeout" in error_text.lower()
+        ):
+            self._emit(
+                "Browser extension is not responding. Reload the extension tab and retry. Agent stopped."
+            )
             self.stop()
         return result
 
@@ -371,18 +398,21 @@ class AgentSession:
                 return
 
             self._emit(f"Agent started. Goal: {self._goal}")
+            self._emit(f"Active user id: {self._user_id}")
+            self._emit(f"Active agent id: {self._agent_id}")
             max_steps = 80
 
             run_architecture_1(
                 api_key=api_key,
                 goal=self._goal,
+                user_id=self._user_id,
+                agent_id=self._agent_id,
                 max_steps=max_steps,
                 emit=self._emit,
                 approved_send=self._approved_send,
                 request_user_input=self.request_user_input,
                 get_runtime_feedback=self.drain_runtime_feedback,
                 stop_event=self._stop,
-                user_id=self._user_id,
             )
         except Exception as exc:
             self._emit(f"Agent crashed: {type(exc).__name__}: {exc}")

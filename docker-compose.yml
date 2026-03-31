@@ -2,15 +2,15 @@ services:
   backend:
     build: ./backend
     ports:
-      - "5050:5000"
+      - "5000:5000"
       - "7878:7878"
     volumes:
       - ./backend:/app
     environment:
-      - REDIS_URL=redis://redis:6379
-      - DATABASE_URL=postgresql://user:password@postgres:5432/interfaceai
       - PYTHONUNBUFFERED=1
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - INTERFACEAI_DB_PASSWORD=${INTERFACEAI_DB_PASSWORD}
+      - MEM0_AGENT_ID=${MEM0_AGENT_ID}
     depends_on:
       - redis
       - postgres

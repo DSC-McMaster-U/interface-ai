@@ -6,7 +6,8 @@ from flask import Flask, Response, jsonify, request, stream_with_context
 from flask_cors import CORS
 
 from app.agent_execution import session
-from app.db import get_profile, init_tables, upsert_profile
+from app.continuous_learning import Mem0MemoryStore
+from app.db import get_profile, init_tables, normalize_user_id, upsert_profile
 from app.extension_automation import (
     is_server_running,
     send_command_sync,
@@ -64,7 +65,7 @@ def auth_google():
 
     info = resp.json()
     email = info.get("email", "")
-    user_id = info.get("sub", email)
+    user_id = normalize_user_id(info.get("sub", email))
 
     if not user_id:
         return jsonify({"error": "could not determine user id"}), 400
@@ -118,6 +119,97 @@ def update_user_profile():
     return jsonify(profile), 200
 
 
+def _user_memories_response(
+    user_id: str,
+    *,
+    deleted_count: int | None = None,
+):
+    memories = Mem0MemoryStore(agent_id=session.get_agent_id()).list_user_memories(
+        user_id=user_id,
+        limit=200,
+    )
+    payload = {"user_id": user_id, "memories": memories}
+    if deleted_count is not None:
+        payload["deleted_count"] = deleted_count
+    return jsonify(payload), 200
+
+
+def _agent_memories_response(*, deleted_count: int | None = None):
+    store = Mem0MemoryStore(agent_id=session.get_agent_id())
+    payload = {
+        "agent_id": session.get_agent_id(),
+        "memories": store.list_agent_memories(limit=200),
+    }
+    if deleted_count is not None:
+        payload["deleted_count"] = deleted_count
+    return jsonify(payload), 200
+
+
+@app.get("/api/user-memories")
+def get_user_memories():
+    user_id = request.args.get("user_id", "").strip()
+    if not user_id:
+        return jsonify({"error": "missing user_id"}), 400
+    return _user_memories_response(user_id)
+
+
+@app.post("/api/user-memories")
+def add_user_memory():
+    data = request.get_json(silent=True) or {}
+    user_id = (data.get("user_id") or "").strip()
+    field_key = (data.get("field_key") or "").strip().lower()
+    fact = (data.get("fact") or "").strip()
+    if not user_id:
+        return jsonify({"error": "missing user_id"}), 400
+    if not field_key:
+        return jsonify({"error": "missing field_key"}), 400
+    if not fact:
+        return jsonify({"error": "missing fact"}), 400
+
+    Mem0MemoryStore(agent_id=session.get_agent_id()).add_user_memory(
+        user_id=user_id,
+        field_key=field_key,
+        fact=fact,
+        source="settings_ui",
+    )
+    return _user_memories_response(user_id)
+
+
+@app.delete("/api/user-memories")
+def delete_user_memory():
+    user_id = request.args.get("user_id", "").strip()
+    field_key = request.args.get("field_key", "").strip().lower()
+    memory_id = request.args.get("memory_id", "").strip()
+    if not user_id:
+        return jsonify({"error": "missing user_id"}), 400
+    if not field_key and not memory_id:
+        return jsonify({"error": "missing field_key or memory_id"}), 400
+
+    deleted_count = Mem0MemoryStore(agent_id=session.get_agent_id()).delete_user_memory(
+        user_id=user_id, field_key=field_key, memory_id=memory_id
+    )
+    return _user_memories_response(user_id, deleted_count=deleted_count)
+
+
+@app.get("/api/agent-memories")
+def get_agent_memories():
+    return _agent_memories_response()
+
+
+@app.delete("/api/agent-memories")
+def delete_agent_memory():
+    memory_id = request.args.get("memory_id", "").strip()
+    if not memory_id:
+        return jsonify({"error": "missing memory_id"}), 400
+
+    deleted_count = Mem0MemoryStore(
+        agent_id=session.get_agent_id()
+    ).delete_agent_memory(
+        memory_id=memory_id,
+    )
+    return _agent_memories_response(deleted_count=deleted_count)
+
+
 @app.get("/api/extension/health")
 def api_extension_health():
     running = is_server_running()
@@ -151,17 +243,21 @@ def relay():
         user_id = request.args.get("user_id", "")
 
     msg = (message or "").strip()
-    uid = (user_id or "").strip() or None
+    uid = (user_id or "").strip()
 
     if msg.upper().startswith("GOAL:"):
         goal = msg.split(":", 1)[-1].strip()
         if not goal:
             return _sse([{"message": "Missing goal text after GOAL:"}, {"done": True}])
 
-        session.set_user_id(uid)
+        if uid:
+            session.set_user_id(uid)
         session.start(goal, restart_if_running=True)
 
         def stream_agent():
+            # Emit an immediate acknowledgement so the UI can stop showing
+            # "Thinking..." even if the first tool/event takes time.
+            yield {"message": f'Goal received: "{goal}". Starting agent...'}
             for item in session.stream():
                 if "message" in item:
                     yield {"message": item["message"]}
@@ -177,7 +273,11 @@ def relay():
 
 @app.post("/api/relay_once")
 def relay_once():
-    msg = ((request.get_json(silent=True) or {}).get("message") or "").strip()
+    data = request.get_json(silent=True) or {}
+    msg = (data.get("message") or "").strip()
+    user_id = (data.get("user_id") or "").strip()
+    if user_id:
+        session.set_user_id(user_id)
     items = _handle_non_goal_command(msg)
     message = next(
         (str(item.get("message", "")) for item in items if "message" in item), ""
@@ -204,6 +304,10 @@ def _handle_non_goal_command(msg: str) -> list[dict[str, object]]:
     if msg.upper() == "HELP":
         help_text = (
             "GOAL: <task> - start a new browser automation task.\n\n"
+            "SET USER ID: <id> - set the active user id for personalization and testing.\n\n"
+            "USER ID - show the active user id.\n\n"
+            "SET AGENT ID: <id> - set the active shared agent memory id.\n\n"
+            "AGENT ID - show the active agent id.\n\n"
             "FEEDBACK: <instruction> - redirect the running agent before its next tool call.\n\n"
             "STOP - stop the current agent session.\n\n"
             "UNSTOP - resume the most recently stopped goal.\n\n"
@@ -227,6 +331,41 @@ def _handle_non_goal_command(msg: str) -> list[dict[str, object]]:
     if msg.upper() == "APPROVAL STATUS":
         status = "ON" if session.get_require_approval() else "OFF"
         return [{"message": f"Approval mode: {status}"}, {"done": True}]
+
+    if msg.upper().startswith("SET USER ID:"):
+        user_id = msg.split(":", 1)[1].strip()
+        if not user_id:
+            return [{"message": "Missing user id after SET USER ID:"}, {"done": True}]
+        try:
+            session.set_user_id(user_id)
+        except ValueError as exc:
+            return [{"message": str(exc)}, {"done": True}]
+        return [
+            {"message": f"Active user id set to: {session.get_user_id()}"},
+            {"done": True},
+        ]
+
+    if msg.upper() == "USER ID":
+        return [{"message": f"Active user id: {session.get_user_id()}"}, {"done": True}]
+
+    if msg.upper().startswith("SET AGENT ID:"):
+        agent_id = msg.split(":", 1)[1].strip()
+        if not agent_id:
+            return [{"message": "Missing agent id after SET AGENT ID:"}, {"done": True}]
+        try:
+            session.set_agent_id(agent_id)
+        except ValueError as exc:
+            return [{"message": str(exc)}, {"done": True}]
+        return [
+            {"message": f"Active agent id set to: {session.get_agent_id()}"},
+            {"done": True},
+        ]
+
+    if msg.upper() == "AGENT ID":
+        return [
+            {"message": f"Active agent id: {session.get_agent_id()}"},
+            {"done": True},
+        ]
 
     if msg and (
         session.is_waiting_for_approval() or session.is_waiting_for_user_input()
@@ -267,9 +406,19 @@ def _handle_non_goal_command(msg: str) -> list[dict[str, object]]:
 
 
 def _sse(items):
+    def _compact_item(item: dict[str, object]) -> dict[str, object]:
+        message = item.get("message")
+        if isinstance(message, str) and len(message) > 4000:
+            return {
+                **item,
+                "message": message[:4000] + "...(truncated)",
+            }
+        return item
+
     def event_stream():
         for item in items:
-            yield f"data: {json.dumps(item)}\\n\\n"
+            compact = _compact_item(item)
+            yield f"data: {json.dumps(compact)}\\n\\n"
 
     return Response(
         stream_with_context(event_stream()),

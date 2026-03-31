@@ -52,6 +52,33 @@ def parse_verdict_json(text: str) -> dict[str, Any]:
     return {}
 
 
+def parse_json_payload(text: str) -> Any:
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        pass
+    if "```" in raw:
+        start_obj = raw.find("{")
+        end_obj = raw.rfind("}")
+        start_arr = raw.find("[")
+        end_arr = raw.rfind("]")
+
+        if start_arr != -1 and end_arr != -1 and end_arr > start_arr:
+            try:
+                return json.loads(raw[start_arr : end_arr + 1])
+            except Exception:
+                pass
+        if start_obj != -1 and end_obj != -1 and end_obj > start_obj:
+            try:
+                return json.loads(raw[start_obj : end_obj + 1])
+            except Exception:
+                pass
+    return None
+
+
 def invoke_with_retry(
     model: ChatGoogleGenerativeAI,
     messages: list[BaseMessage],
