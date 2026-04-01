@@ -203,6 +203,7 @@ class AgentSession:
             return "ignored"
 
         if msg.upper() == "STOP":
+            self._emit("Stopping agent session...")
             self.stop()
             return "stopped"
 
