@@ -417,6 +417,31 @@ def run_architecture_1(
         return tracked_send("getPageStatus", {})
 
     @tool
+    def getStatusVisionAI(prompt: str = "") -> dict[str, Any]:
+        """Analyze a screenshot of the current page using Vision AI. Describe what is happening, what the current state is, or identify any errors/blockers/issues on screen (like missing required fields, tooltips, CAPTCHAs, or banners)."""
+        emit(f"Vision AI analyzing page status for issues/blockers...")
+        shot = approved_send("takeScreenshot", {})
+        if not shot.get("success") or not shot.get("data"):
+            return {"success": False, "error": "Vision AI failed: Could not capture screenshot."}
+
+        img_data = shot["data"]
+        url = os.getenv("VISION_AI_URL", "http://vision-ai:6000")
+        try:
+            res = requests.post(f"{url}/analyze", json={"prompt": prompt, "image": img_data}, timeout=30)
+            res.raise_for_status()
+            vision_data = res.json()
+
+            if not vision_data.get("success"):
+                return {"success": False, "error": f"Vision AI analysis failed: {vision_data.get('error')}"}
+
+            description = vision_data.get("description", "No description returned.")
+            emit(f"Vision AI Description: {description}")
+            return {"success": True, "message": description}
+
+        except Exception as e:
+            return {"success": False, "error": f"Vision AI analysis request failed: {str(e)}"}
+
+    @tool
     def clickFirstSearchResult() -> dict[str, Any]:
         """Click first search result on results page."""
         return tracked_send("clickFirstSearchResult", {})
@@ -572,6 +597,7 @@ def run_architecture_1(
         goBack,
         goForward,
         getPageStatus,
+        getStatusVisionAI,
         clickFirstSearchResult,
         pressKey,
         pressEnterOn,
@@ -637,6 +663,7 @@ def run_architecture_1(
                 "Call one tool at a time. If a tool fails, you must try a different approach. "
                 "Use getPageStatus often; it tells you what inputs, textareas, editor surfaces, buttons, checkboxes, radios, dropdowns, file inputs, links, forms, and other visible elements are on the page. "
                 "Use getPageStatus as your inventory of what you can interact with before choosing tools. "
+                "Use getStatusVisionAI to analyze what is factually visible on screen to humans if you encounter a confusing error, cannot proceed, or are blocked. "
                 "Use fillInput for text-like fields, including textareas and editor surfaces such as contenteditable or role=textbox elements, setCheckbox for checkboxes, selectRadio for radio groups, selectOption for dropdowns, and uploadFile/clickFileInput for file inputs. "
                 "Use getWebsiteContent when the task depends on reading the actual content of an article, documentation page, Wikipedia page, or long webpage prose instead of just interactive elements. "
                 "If the user asks what a page says, asks for a summary, asks for key points, asks for facts from an article, or asks you to report information from a webpage, you should navigate to the page, call getWebsiteContent, and then answer using the extracted text. "

@@ -269,3 +269,25 @@ def find_element_unified(
         "error": last_error,
         "model": VISION_MODEL,
     }
+
+ d e f   a n a l y z e _ s c r e e n ( i m a g e _ p a t h :   s t r ,   p r o m p t :   s t r   |   N o n e   =   N o n e )   - >   T u p l e [ s t r ,   f l o a t ,   d i c t ] : 
+         s t a r t _ t i m e   =   t i m e . t i m e ( ) 
+         i n i t _ s e r v i c e s ( ) 
+ 
+         i m a g e   =   I m a g e . o p e n ( i m a g e _ p a t h ) . c o n v e r t ( " R G B " ) 
+         f i n a l _ p r o m p t   =   p r o m p t   i f   p r o m p t   e l s e   " D e s c r i b e   w h a t   i s   h a p p e n i n g   o n   t h e   s c r e e n .   I d e n t i f y   a n y   e r r o r s ,   i s s u e s ,   o r   b l o c k e r s . " 
+         
+         l a s t _ e r r o r   =   " " 
+         t r y : 
+                 r e s p o n s e   =   _ g e m i n i _ c l i e n t . m o d e l s . g e n e r a t e _ c o n t e n t ( 
+                         m o d e l = V I S I O N _ M O D E L , 
+                         c o n t e n t s = [ i m a g e ,   f i n a l _ p r o m p t ] , 
+                 ) 
+                 t e x t   =   g e t a t t r ( r e s p o n s e ,   " t e x t " ,   " " ) 
+                 r e t u r n   t e x t ,   t i m e . t i m e ( )   -   s t a r t _ t i m e ,   { " m o d e l " :   V I S I O N _ M O D E L } 
+         e x c e p t   E x c e p t i o n   a s   e x c : 
+                 l a s t _ e r r o r   =   s t r ( e x c ) 
+ 
+         r e t u r n   " " ,   t i m e . t i m e ( )   -   s t a r t _ t i m e ,   { " e r r o r " :   l a s t _ e r r o r ,   " m o d e l " :   V I S I O N _ M O D E L } 
+  
+ 
