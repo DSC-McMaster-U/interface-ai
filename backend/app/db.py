@@ -28,7 +28,7 @@ _DB_PASSWORD_ENV_VAR = "INTERFACEAI_DB_PASSWORD"
 
 
 def get_database_url() -> str:
-    raw_password = os.getenv(_DB_PASSWORD_ENV_VAR, "").strip()
+    raw_password = os.getenv(_DB_PASSWORD_ENV_VAR, "").strip().strip('"').strip("'")
     if not raw_password:
         raise RuntimeError(
             f"Missing required environment variable: {_DB_PASSWORD_ENV_VAR}"
