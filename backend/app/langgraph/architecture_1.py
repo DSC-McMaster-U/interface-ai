@@ -292,53 +292,93 @@ def run_architecture_1(
         """Navigate current tab to url."""
         return tracked_send("goto", {"url": url})
 
-    def _run_vision_fallback(query: str, action: str, fallback_value: str = "") -> dict[str, Any]:
+    def _run_vision_fallback(
+        query: str, action: str, fallback_value: str = ""
+    ) -> dict[str, Any]:
         from app.agent_execution import session
+
         vision_mode = getattr(session, "get_vision_mode", lambda: "FALLBACK")()
         if vision_mode == "OFF":
             return {"success": False, "error": "Vision mode is OFF"}
-            
+
         semantic_query = query
         try:
-            for group in ["textboxes", "buttons", "links", "checkboxes", "radios", "dropdowns"]:
+            for group in [
+                "textboxes",
+                "buttons",
+                "links",
+                "checkboxes",
+                "radios",
+                "dropdowns",
+            ]:
                 for el in latest_status.get(group, []):
                     if el.get("id") == query or el.get("name") == query:
-                        semantic_query = el.get("ariaLabel") or el.get("placeholder") or el.get("text") or el.get("title") or query
+                        semantic_query = (
+                            el.get("ariaLabel")
+                            or el.get("placeholder")
+                            or el.get("text")
+                            or el.get("title")
+                            or query
+                        )
                         break
         except Exception:
             pass
-            
+
         emit(f"Vision AI ({vision_mode} mode) activating for '{query}'...")
         shot = approved_send("takeScreenshot", {})
         if not shot.get("success") or not shot.get("data"):
-            return {"success": False, "error": f"Vision AI failed: Could not capture screenshot. {shot.get('error', '')}"}
-        
+            return {
+                "success": False,
+                "error": f"Vision AI failed: Could not capture screenshot. {shot.get('error', '')}",
+            }
+
         img_data = shot["data"]
         url = os.getenv("VISION_AI_URL", "http://vision-ai:6000")
         try:
-            res = requests.post(f"{url}/find_element", json={"query": semantic_query, "image": img_data}, timeout=15)
+            res = requests.post(
+                f"{url}/find_element",
+                json={"query": semantic_query, "image": img_data},
+                timeout=15,
+            )
             res.raise_for_status()
             vision_data = res.json()
-            
+
             if not vision_data.get("success") or "center" not in vision_data:
-                return {"success": False, "error": f"Vision AI could not locate '{query}' on screen."}
-                
+                return {
+                    "success": False,
+                    "error": f"Vision AI could not locate '{query}' on screen.",
+                }
+
             center = vision_data["center"]
             cx, cy = center["x"], center["y"]
             emit(f"Vision AI found '{query}' at ({cx}, {cy}). Executing {action}...")
-            
+
             click_res = tracked_send("clickAtCoordinate", {"x": cx, "y": cy})
             if not click_res.get("success"):
-                return {"success": False, "error": f"Vision AI click at ({cx}, {cy}) failed: {click_res.get('error')}"}
+                return {
+                    "success": False,
+                    "error": f"Vision AI click at ({cx}, {cy}) failed: {click_res.get('error')}",
+                }
 
             if action == "fillInput":
                 type_res = tracked_send("fillActiveInput", {"text": fallback_value})
                 if not type_res.get("success"):
-                    return {"success": False, "error": f"Vision AI type text failed: {type_res.get('error')}"}
-                return {"success": True, "vision_used": True, "message": f"Successfully clicked and typed into '{query}' via Vision AI."}
-                
-            return {"success": True, "vision_used": True, "message": f"Successfully clicked '{query}' via Vision AI."}
-            
+                    return {
+                        "success": False,
+                        "error": f"Vision AI type text failed: {type_res.get('error')}",
+                    }
+                return {
+                    "success": True,
+                    "vision_used": True,
+                    "message": f"Successfully clicked and typed into '{query}' via Vision AI.",
+                }
+
+            return {
+                "success": True,
+                "vision_used": True,
+                "message": f"Successfully clicked '{query}' via Vision AI.",
+            }
+
         except Exception as e:
             return {"success": False, "error": f"Vision AI request failed: {str(e)}"}
 
@@ -346,8 +386,9 @@ def run_architecture_1(
     def clickByName(name: str, exactMatch: bool = False) -> dict[str, Any]:
         """Click element by visible text. Useful for clicking links, buttons, video titles, or any visible text. Uses fuzzy matching (substring) by default."""
         from app.agent_execution import session
+
         vision_mode = getattr(session, "get_vision_mode", lambda: "FALLBACK")()
-        
+
         if vision_mode == "FORCE":
             return _run_vision_fallback(name, "clickByName")
 
@@ -357,9 +398,12 @@ def run_architecture_1(
         return res
 
     @tool
-    def fillInput(identifier: str, value: str, press_enter: bool = False) -> dict[str, Any]:
+    def fillInput(
+        identifier: str, value: str, press_enter: bool = False
+    ) -> dict[str, Any]:
         """Fill input field by identifier with value. Set press_enter to True to simulate pressing the Enter key immediately after typing (useful for search bars)."""
         from app.agent_execution import session
+
         vision_mode = getattr(session, "get_vision_mode", lambda: "FALLBACK")()
 
         if vision_mode == "FORCE":
@@ -371,10 +415,9 @@ def run_architecture_1(
         res = tracked_send("fillInput", {"identifier": identifier, "value": value})
         if not res.get("success") and vision_mode == "FALLBACK":
             res = _run_vision_fallback(identifier, "fillInput", fallback_value=value)
-        
+
         if res.get("success") and press_enter:
             tracked_send("pressEnter", {})
-            
 
     @tool
     def pressEnter() -> dict[str, Any]:
@@ -419,27 +462,38 @@ def run_architecture_1(
     @tool
     def getStatusVisionAI(prompt: str = "") -> dict[str, Any]:
         """Analyze a screenshot of the current page using Vision AI. Describe what is happening, what the current state is, or identify any errors/blockers/issues on screen (like missing required fields, tooltips, CAPTCHAs, or banners)."""
-        emit(f"Vision AI analyzing page status for issues/blockers...")
+        emit("Vision AI analyzing page status for issues/blockers...")
         shot = approved_send("takeScreenshot", {})
         if not shot.get("success") or not shot.get("data"):
-            return {"success": False, "error": "Vision AI failed: Could not capture screenshot."}
+            return {
+                "success": False,
+                "error": "Vision AI failed: Could not capture screenshot.",
+            }
 
         img_data = shot["data"]
         url = os.getenv("VISION_AI_URL", "http://vision-ai:6000")
         try:
-            res = requests.post(f"{url}/analyze", json={"prompt": prompt, "image": img_data}, timeout=30)
+            res = requests.post(
+                f"{url}/analyze", json={"prompt": prompt, "image": img_data}, timeout=30
+            )
             res.raise_for_status()
             vision_data = res.json()
 
             if not vision_data.get("success"):
-                return {"success": False, "error": f"Vision AI analysis failed: {vision_data.get('error')}"}
+                return {
+                    "success": False,
+                    "error": f"Vision AI analysis failed: {vision_data.get('error')}",
+                }
 
             description = vision_data.get("description", "No description returned.")
             emit(f"Vision AI Description: {description}")
             return {"success": True, "message": description}
 
         except Exception as e:
-            return {"success": False, "error": f"Vision AI analysis request failed: {str(e)}"}
+            return {
+                "success": False,
+                "error": f"Vision AI analysis request failed: {str(e)}",
+            }
 
     @tool
     def clickFirstSearchResult() -> dict[str, Any]:

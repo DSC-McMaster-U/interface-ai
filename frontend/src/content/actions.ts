@@ -183,13 +183,15 @@ export function clickAtCoordinate(x: number, y: number): ActionResult {
   if (el) {
     el.focus();
     el.click();
-    
+
     if (el.tagName !== "INPUT" && el.tagName !== "TEXTAREA") {
       const input = el.querySelector("input, textarea") as HTMLElement | null;
       if (input) {
         input.focus();
       } else {
-        const closestInput = el.closest("input, textarea") as HTMLElement | null;
+        const closestInput = el.closest(
+          "input, textarea",
+        ) as HTMLElement | null;
         if (closestInput) {
           closestInput.focus();
         }
@@ -253,13 +255,23 @@ export function clickByName(name: string, exactMatch = false): ActionResult {
       const target = currentNode.parentElement;
       if (target) {
         // Try to find if it has an interactive wrapper we should trigger instead
-        const clickableParent = target.closest("a, button, [role='button'], [role='link']") as HTMLElement;
+        const clickableParent = target.closest(
+          "a, button, [role='button'], [role='link']",
+        ) as HTMLElement;
         if (clickableParent) {
           clickableParent.click();
-          return { success: true, element: clickableParent.tagName, text: clickableParent.textContent?.trim() || "" };
+          return {
+            success: true,
+            element: clickableParent.tagName,
+            text: clickableParent.textContent?.trim() || "",
+          };
         }
         target.click();
-        return { success: true, element: target.tagName, text: target.textContent?.trim() || "" };
+        return {
+          success: true,
+          element: target.tagName,
+          text: target.textContent?.trim() || "",
+        };
       }
     }
   }
@@ -345,7 +357,9 @@ export function fillActiveInput(text: string): ActionResult {
   if (
     active instanceof HTMLInputElement ||
     active instanceof HTMLTextAreaElement ||
-    (active && (active.getAttribute("contenteditable") === "true" || active.getAttribute("role") === "textbox"))
+    (active &&
+      (active.getAttribute("contenteditable") === "true" ||
+        active.getAttribute("role") === "textbox"))
   ) {
     return setTextLikeElementValue(active, text);
   }
@@ -1276,7 +1290,7 @@ export type ActionType =
   | { type: "pressKey"; key: string }
   | { type: "pressEnterOn"; identifier: string }
   | { type: "typeText"; text: string }
-    | { type: "fillActiveInput"; text: string }
+  | { type: "fillActiveInput"; text: string }
   | { type: "selectOption"; identifier: string; value: string }
   | { type: "setCheckbox"; identifier: string; checked?: boolean }
   | { type: "selectRadio"; identifier: string; value: string }
@@ -1329,9 +1343,9 @@ export async function executeAction(
     case "pressEnterOn":
       return pressEnterOn(action.identifier);
     case "typeText":
-        return typeText(action.text);
-      case "fillActiveInput":
-        return fillActiveInput(action.text);
+      return typeText(action.text);
+    case "fillActiveInput":
+      return fillActiveInput(action.text);
     case "selectOption":
       return selectOption(action.identifier, action.value);
     case "setCheckbox":
@@ -1354,7 +1368,10 @@ export async function executeAction(
       return new Promise((resolve) => {
         chrome.runtime.sendMessage({ type: "TAKE_SCREENSHOT" }, (response) => {
           if (chrome.runtime.lastError) {
-            resolve({ success: false, error: chrome.runtime.lastError.message });
+            resolve({
+              success: false,
+              error: chrome.runtime.lastError.message,
+            });
           } else {
             resolve(response);
           }
@@ -1396,9 +1413,9 @@ export function describeAction(action: ActionType): string {
     case "pressEnterOn":
       return `Press Enter on "${action.identifier}"`;
     case "typeText":
-        return `Type "${action.text}"`;
-      case "fillActiveInput":
-        return `Fill active with "${action.text}"`;
+      return `Type "${action.text}"`;
+    case "fillActiveInput":
+      return `Fill active with "${action.text}"`;
     case "selectOption":
       return `Select "${action.value}" in "${action.identifier}"`;
     case "setCheckbox":
@@ -1423,4 +1440,3 @@ export function describeAction(action: ActionType): string {
       return "Execute action";
   }
 }
-

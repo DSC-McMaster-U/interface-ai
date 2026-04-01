@@ -337,14 +337,22 @@ def _handle_non_goal_command(msg: str) -> list[dict[str, object]]:
     if msg.upper().startswith("VISION "):
         mode = msg.upper().split(" ", 1)[1].strip()
         if mode == "STATUS":
-            return [{"message": f"Vision mode: {session.get_vision_mode()}"}, {"done": True}]
+            return [
+                {"message": f"Vision mode: {session.get_vision_mode()}"},
+                {"done": True},
+            ]
         elif mode in ["ON", "OFF", "FORCE", "FALLBACK"]:
             if mode == "ON":
                 mode = "FALLBACK"
             session.set_vision_mode(mode)
             return [{"message": f"Vision mode set to: {mode}"}, {"done": True}]
         else:
-            return [{"message": f"Unknown vision mode: {mode}. Use ON, OFF, FORCE, or FALLBACK."}, {"done": True}]
+            return [
+                {
+                    "message": f"Unknown vision mode: {mode}. Use ON, OFF, FORCE, or FALLBACK."
+                },
+                {"done": True},
+            ]
 
     if msg.upper().startswith("SET USER ID:"):
         user_id = msg.split(":", 1)[1].strip()
