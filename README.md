@@ -33,13 +33,13 @@ By combining intent recognition, vision-based action execution, and contextual a
 
 | Photo | Contributor | Role & Tools | Notable Contributions |
 |:--:|:--|:--|:--|
-| <img width="120" height="120" src="https://github.com/user-attachments/assets/f594f377-a326-49cd-9e18-c9caa5df4b59" alt="Sachin Gupta" /> | [**Sachin Gupta**](https://github.com/SachinVedGupta) <br/><i>Project Lead</i> | Python · PyTorch · GCP | Ideation |
+| <img width="120" height="120" src="https://github.com/user-attachments/assets/f594f377-a326-49cd-9e18-c9caa5df4b59" alt="Sachin Gupta" /> | [**Sachin Gupta**](https://github.com/SachinVedGupta) <br/><i>Project Lead</i> | LangGraph · Mem0 · GCP | Ideation |
 | <img width="120" height="120" src="https://github.com/user-attachments/assets/39fb4226-fc6b-4c90-9abf-b1526e744963" alt="Adrian Najmi" /> | [**Adrian Najmi**](https://github.com/adriancoder06) <br/><i>Open Source Dev</i> | Python · JavaScript · TypeScript · Chrome Extension APIs | Action Execution |
 |  | [**Hassan Ibrahim**](https://github.com/Hassan-Ibrahim-1) <br/><i>Backend</i> | Python · Flask | Database Design |
 |  | [**Luna Aljammal**](https://github.com/luna-aljammal) <br/><i>Backend + DB</i> | Python · Flask · Redis · GCP | Database Integration |
 | <img width="120" height="120" src="https://github.com/user-attachments/assets/ca8c625c-dcfb-46a3-869e-6618afd8ae08" alt="Andrew Wu" /> | [**Andrew Wu**](https://github.com/andrewwu13) <br/><i>Frontend</i> | Python · JavaScript · GCP | UI, Frontend Development, Auth, Database |
 |  | [**Mohit Gedela**](https://github.com/MohitGedela) <br/><i>Vision AI</i> | Python · Java · JavaScript | Vision AI Development |
-|  | [**Alex Melnbardis**](https://github.com/amelnbardis2004) <br/><i>AI</i> | Python · PyTorch · Playwright · LangGraph | AI Agents + Vision AI |
+| <img width="120" height="120" alt="Alex Melnbardis" src="https://github.com/user-attachments/assets/6af3cb9e-21cc-48ab-baaa-16cd99377259" /> | [**Alex Melnbardis**](https://github.com/amelnbardis2004) <br/><i>AI</i> | Python · TypeScript · LangGraph · Chrome Extension APIs · GCP | Vision AI |
 |  | [**David Olejniczak**](https://github.com/davidolejniczak) <br/><i>CI/CD + Cloud</i> | CGP · Docker · Github Actions | CI/CD |
 |  | [**Anhad Chawla**](https://github.com/AsmpSa00) <br/><i>AI Specialist + Solution Architect</i> | Python · LangGraph · GCP · BigTable | Agentic Workflows |
 |  |  |  |  |
