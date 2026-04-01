@@ -289,7 +289,7 @@ def run_architecture_1(
 
     @tool
     def goto(url: str) -> dict[str, Any]:
-        """Navigate current tab to url. NEVER include search parameters or paths for search engines/video sites (e.g. NEVER use youtube.com/results?search_query=x). Always use the base homepage url (e.g. https://www.youtube.com or https://www.google.com), and THEN use fillInput to visually interact with the search bar."""
+        """Navigate current tab to url."""
         return tracked_send("goto", {"url": url})
 
     def _run_vision_fallback(query: str, action: str, fallback_value: str = "") -> dict[str, Any]:
@@ -865,10 +865,3 @@ def run_architecture_1(
             initial_status=initial_status,
             final_status=latest_status,
         )
-
-
-
-
-
-
-

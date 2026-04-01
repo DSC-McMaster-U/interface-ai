@@ -973,9 +973,9 @@ export function setupInput(
 
         const data = (await once.json()) as ChatApiResponse;
         handlers.showLoading(false);
-          if (typeof data.message === "string" && data.message) {
-            handlers.addMessage(data.message, "assistant");
-          } else if (data.echo) {
+        if (typeof data.message === "string" && data.message) {
+          handlers.addMessage(data.message, "assistant");
+        } else if (data.echo) {
           handlers.addMessage(data.echo, "assistant");
         }
         if (Array.isArray(data.actions) && data.actions.length > 0) {
@@ -1017,7 +1017,9 @@ export function setupInput(
             handlers.showLoading(false);
             firstMessage = false;
           }
-          
+          if (typeof data.message === "string" && data.message) {
+            handlers.addMessage(data.message, "assistant");
+          }
           if (data.done === true) {
             sawDone = true;
             break;
@@ -1032,7 +1034,9 @@ export function setupInput(
             handlers.showLoading(false);
             firstMessage = false;
           }
-          
+          if (typeof data.message === "string" && data.message) {
+            handlers.addMessage(data.message, "assistant");
+          }
           if (data.done === true) {
             sawDone = true;
             break;

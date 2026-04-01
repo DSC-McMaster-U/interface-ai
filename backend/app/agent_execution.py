@@ -38,7 +38,7 @@ class AgentSession:
         self._thread: threading.Thread | None = None
         self._goal: str = ""
         self._last_stopped_goal: str = ""
-        self._require_approval: bool = True
+        self._require_approval: bool = False
         self._vision_mode: str = "FALLBACK"
         self._queued_goal: str | None = None
         self._restart_watcher_active: bool = False
@@ -279,7 +279,7 @@ class AgentSession:
 
         self._pending_action = None
         if self._stop.is_set():
-            raise RuntimeError("Agent stopped by user")
+            return False
 
         approved = self._approval_decision == "YES"
         if approved:
@@ -332,7 +332,7 @@ class AgentSession:
         pending = self._pending_user_input
         self._pending_user_input = None
         if self._stop.is_set():
-            raise RuntimeError("Agent stopped by user")
+            return {"success": False, "error": "stopped"}
 
         answer = (self._user_input_value or "").strip()
         self._user_input_value = None
@@ -361,7 +361,7 @@ class AgentSession:
         payload = params or {}
 
         if self._stop.is_set():
-            raise RuntimeError("Agent stopped by user")
+            return {"success": False, "error": "stopped"}
 
         self._emit(f"[tool:call] {action} {json.dumps(payload, ensure_ascii=True)}")
         if not self._approve(action, payload):
@@ -390,10 +390,12 @@ class AgentSession:
         if (
             error_text == "WebSocket server not running"
             or "No browser connected" in error_text
+            or "command timeout" in error_text.lower()
         ):
             self._emit(
-                "Browser extension has disconnected tracking. Please check if the tab was closed."
+                "Browser extension is not responding. Reload the extension tab and retry. Agent stopped."
             )
+            self.stop()
         return result
 
     def _run(self) -> None:
@@ -421,10 +423,7 @@ class AgentSession:
                 stop_event=self._stop,
             )
         except Exception as exc:
-            if isinstance(exc, RuntimeError) and str(exc) == "Agent stopped by user":
-                self._emit("Agent session successfully stopped.")
-            else:
-                self._emit(f"Agent crashed: {type(exc).__name__}: {exc}")
+            self._emit(f"Agent crashed: {type(exc).__name__}: {exc}")
         finally:
             self._out.put({"done": True})
 

@@ -921,20 +921,6 @@ chrome.runtime.onInstalled.addListener((details) => {
  */
 async function toggleOverlay(tab: chrome.tabs.Tab): Promise<void> {
   if (!tab.id) return;
-
-  // Prevent injection on restricted URLs
-  if (
-    tab.url &&
-    (tab.url.startsWith("chrome://") ||
-      tab.url.startsWith("edge://") ||
-      tab.url.startsWith("about:") ||
-      tab.url.startsWith("chrome-extension://") ||
-      tab.url.startsWith("https://chrome.google.com/webstore"))
-  ) {
-    console.error(`[InterfaceAI] Cannot operate on restricted URL: ${tab.url}`);
-    return;
-  }
-
   await setAgentTargetTab(tab.id);
 
   try {
