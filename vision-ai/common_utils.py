@@ -31,15 +31,12 @@ def draw_bounding_boxes(
     # Try to load a font, fallback to default if not available
     try:
         font = ImageFont.truetype("arial.ttf", 20)
-        font_small = ImageFont.truetype("arial.ttf", 16)
-    except:
+    except Exception:
         try:
             # Try alternative font paths
             font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 20)
-            font_small = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 16)
-        except:
+        except Exception:
             font = ImageFont.load_default()
-            font_small = ImageFont.load_default()
 
     # Draw bounding boxes
     for x1, y1, x2, y2 in bounding_boxes:

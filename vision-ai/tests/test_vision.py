@@ -6,9 +6,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pipeline import find_element_unified
 
+
 def test_dummy():
     # Placeholder so pytest doesn't fail with empty tests if there are no other tests
     pass
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
