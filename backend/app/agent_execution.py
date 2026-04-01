@@ -39,6 +39,7 @@ class AgentSession:
         self._goal: str = ""
         self._last_stopped_goal: str = ""
         self._require_approval: bool = False
+        self._vision_mode: str = "FALLBACK"
         self._queued_goal: str | None = None
         self._restart_watcher_active: bool = False
         self._user_id: str = "local-user"
@@ -52,6 +53,14 @@ class AgentSession:
 
     def is_waiting_for_user_input(self) -> bool:
         return self._pending_user_input is not None
+
+    def get_vision_mode(self) -> str:
+        with self._lock:
+            return getattr(self, "_vision_mode", "FALLBACK")
+
+    def set_vision_mode(self, mode: str) -> None:
+        with self._lock:
+            self._vision_mode = mode
 
     def set_require_approval(self, enabled: bool) -> None:
         self._require_approval = bool(enabled)

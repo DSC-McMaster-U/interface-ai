@@ -1,6 +1,8 @@
 import json
 import logging
 import threading
+import requests
+import os
 from typing import Any, Callable
 
 from langchain_core.messages import (
@@ -290,15 +292,132 @@ def run_architecture_1(
         """Navigate current tab to url."""
         return tracked_send("goto", {"url": url})
 
-    @tool
-    def clickByName(name: str, exactMatch: bool = False) -> dict[str, Any]:
-        """Click element by visible text."""
-        return tracked_send("clickByName", {"name": name, "exactMatch": exactMatch})
+    def _run_vision_fallback(
+        query: str, action: str, fallback_value: str = ""
+    ) -> dict[str, Any]:
+        from app.agent_execution import session
+
+        vision_mode = getattr(session, "get_vision_mode", lambda: "FALLBACK")()
+        if vision_mode == "OFF":
+            return {"success": False, "error": "Vision mode is OFF"}
+
+        semantic_query = query
+        try:
+            for group in [
+                "textboxes",
+                "buttons",
+                "links",
+                "checkboxes",
+                "radios",
+                "dropdowns",
+            ]:
+                for el in latest_status.get(group, []):
+                    if el.get("id") == query or el.get("name") == query:
+                        semantic_query = (
+                            el.get("ariaLabel")
+                            or el.get("placeholder")
+                            or el.get("text")
+                            or el.get("title")
+                            or query
+                        )
+                        break
+        except Exception:
+            pass
+
+        emit(f"Vision AI ({vision_mode} mode) activating for '{query}'...")
+        shot = approved_send("takeScreenshot", {})
+        if not shot.get("success") or not shot.get("data"):
+            return {
+                "success": False,
+                "error": f"Vision AI failed: Could not capture screenshot. {shot.get('error', '')}",
+            }
+
+        img_data = shot["data"]
+        url = os.getenv("VISION_AI_URL", "http://vision-ai:6000")
+        try:
+            res = requests.post(
+                f"{url}/find_element",
+                json={"query": semantic_query, "image": img_data},
+                timeout=15,
+            )
+            res.raise_for_status()
+            vision_data = res.json()
+
+            if not vision_data.get("success") or "center" not in vision_data:
+                return {
+                    "success": False,
+                    "error": f"Vision AI could not locate '{query}' on screen.",
+                }
+
+            center = vision_data["center"]
+            cx, cy = center["x"], center["y"]
+            emit(f"Vision AI found '{query}' at ({cx}, {cy}). Executing {action}...")
+
+            click_res = tracked_send("clickAtCoordinate", {"x": cx, "y": cy})
+            if not click_res.get("success"):
+                return {
+                    "success": False,
+                    "error": f"Vision AI click at ({cx}, {cy}) failed: {click_res.get('error')}",
+                }
+
+            if action == "fillInput":
+                type_res = tracked_send("fillActiveInput", {"text": fallback_value})
+                if not type_res.get("success"):
+                    return {
+                        "success": False,
+                        "error": f"Vision AI type text failed: {type_res.get('error')}",
+                    }
+                return {
+                    "success": True,
+                    "vision_used": True,
+                    "message": f"Successfully clicked and typed into '{query}' via Vision AI.",
+                }
+
+            return {
+                "success": True,
+                "vision_used": True,
+                "message": f"Successfully clicked '{query}' via Vision AI.",
+            }
+
+        except Exception as e:
+            return {"success": False, "error": f"Vision AI request failed: {str(e)}"}
 
     @tool
-    def fillInput(identifier: str, value: str) -> dict[str, Any]:
-        """Fill input field by identifier with value."""
-        return tracked_send("fillInput", {"identifier": identifier, "value": value})
+    def clickByName(name: str, exactMatch: bool = False) -> dict[str, Any]:
+        """Click element by visible text. Useful for clicking links, buttons, video titles, or any visible text. Uses fuzzy matching (substring) by default."""
+        from app.agent_execution import session
+
+        vision_mode = getattr(session, "get_vision_mode", lambda: "FALLBACK")()
+
+        if vision_mode == "FORCE":
+            return _run_vision_fallback(name, "clickByName")
+
+        res = tracked_send("clickByName", {"name": name, "exactMatch": exactMatch})
+        if not res.get("success") and vision_mode == "FALLBACK":
+            return _run_vision_fallback(name, "clickByName")
+        return res
+
+    @tool
+    def fillInput(
+        identifier: str, value: str, press_enter: bool = False
+    ) -> dict[str, Any]:
+        """Fill input field by identifier with value. Set press_enter to True to simulate pressing the Enter key immediately after typing (useful for search bars)."""
+        from app.agent_execution import session
+
+        vision_mode = getattr(session, "get_vision_mode", lambda: "FALLBACK")()
+
+        if vision_mode == "FORCE":
+            res = _run_vision_fallback(identifier, "fillInput", fallback_value=value)
+            if res.get("success") and press_enter:
+                tracked_send("pressEnter", {})
+            return res
+
+        res = tracked_send("fillInput", {"identifier": identifier, "value": value})
+        if not res.get("success") and vision_mode == "FALLBACK":
+            res = _run_vision_fallback(identifier, "fillInput", fallback_value=value)
+
+        if res.get("success") and press_enter:
+            tracked_send("pressEnter", {})
 
     @tool
     def pressEnter() -> dict[str, Any]:
@@ -341,6 +460,42 @@ def run_architecture_1(
         return tracked_send("getPageStatus", {})
 
     @tool
+    def getStatusVisionAI(prompt: str = "") -> dict[str, Any]:
+        """Analyze a screenshot of the current page using Vision AI. Describe what is happening, what the current state is, or identify any errors/blockers/issues on screen (like missing required fields, tooltips, CAPTCHAs, or banners)."""
+        emit("Vision AI analyzing page status for issues/blockers...")
+        shot = approved_send("takeScreenshot", {})
+        if not shot.get("success") or not shot.get("data"):
+            return {
+                "success": False,
+                "error": "Vision AI failed: Could not capture screenshot.",
+            }
+
+        img_data = shot["data"]
+        url = os.getenv("VISION_AI_URL", "http://vision-ai:6000")
+        try:
+            res = requests.post(
+                f"{url}/analyze", json={"prompt": prompt, "image": img_data}, timeout=30
+            )
+            res.raise_for_status()
+            vision_data = res.json()
+
+            if not vision_data.get("success"):
+                return {
+                    "success": False,
+                    "error": f"Vision AI analysis failed: {vision_data.get('error')}",
+                }
+
+            description = vision_data.get("description", "No description returned.")
+            emit(f"Vision AI Description: {description}")
+            return {"success": True, "message": description}
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Vision AI analysis request failed: {str(e)}",
+            }
+
+    @tool
     def clickFirstSearchResult() -> dict[str, Any]:
         """Click first search result on results page."""
         return tracked_send("clickFirstSearchResult", {})
@@ -356,9 +511,12 @@ def run_architecture_1(
         return tracked_send("pressEnterOn", {"identifier": identifier})
 
     @tool
-    def typeText(text: str) -> dict[str, Any]:
-        """Type text into active element."""
-        return tracked_send("typeText", {"text": text})
+    def typeText(text: str, press_enter: bool = False) -> dict[str, Any]:
+        """Type text into active element. Set press_enter to True to simulate pressing the Enter key immediately after typing."""
+        res = tracked_send("typeText", {"text": text})
+        if res.get("success") and press_enter:
+            tracked_send("pressEnter", {})
+        return res
 
     @tool
     def selectOption(identifier: str, value: str) -> dict[str, Any]:
@@ -493,6 +651,7 @@ def run_architecture_1(
         goBack,
         goForward,
         getPageStatus,
+        getStatusVisionAI,
         clickFirstSearchResult,
         pressKey,
         pressEnterOn,
@@ -558,6 +717,7 @@ def run_architecture_1(
                 "Call one tool at a time. If a tool fails, you must try a different approach. "
                 "Use getPageStatus often; it tells you what inputs, textareas, editor surfaces, buttons, checkboxes, radios, dropdowns, file inputs, links, forms, and other visible elements are on the page. "
                 "Use getPageStatus as your inventory of what you can interact with before choosing tools. "
+                "Use getStatusVisionAI to analyze what is factually visible on screen to humans if you encounter a confusing error, cannot proceed, or are blocked. "
                 "Use fillInput for text-like fields, including textareas and editor surfaces such as contenteditable or role=textbox elements, setCheckbox for checkboxes, selectRadio for radio groups, selectOption for dropdowns, and uploadFile/clickFileInput for file inputs. "
                 "Use getWebsiteContent when the task depends on reading the actual content of an article, documentation page, Wikipedia page, or long webpage prose instead of just interactive elements. "
                 "If the user asks what a page says, asks for a summary, asks for key points, asks for facts from an article, or asks you to report information from a webpage, you should navigate to the page, call getWebsiteContent, and then answer using the extracted text. "
@@ -729,7 +889,7 @@ def run_architecture_1(
                 content=(
                     f"Task is not complete yet. Reason: {reason}. "
                     f"Suggested next direction: {next_step_hint}. "
-                    "Try a different approach and continue."
+                    "Continue executing the task based on the current state. Take the next logical step."
                 )
             ),
         ]

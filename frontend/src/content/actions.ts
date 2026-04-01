@@ -181,7 +181,23 @@ function dispatchEnterSequence(target: HTMLElement): void {
 export function clickAtCoordinate(x: number, y: number): ActionResult {
   const el = document.elementFromPoint(x, y) as HTMLElement | null;
   if (el) {
+    el.focus();
     el.click();
+
+    if (el.tagName !== "INPUT" && el.tagName !== "TEXTAREA") {
+      const input = el.querySelector("input, textarea") as HTMLElement | null;
+      if (input) {
+        input.focus();
+      } else {
+        const closestInput = el.closest(
+          "input, textarea",
+        ) as HTMLElement | null;
+        if (closestInput) {
+          closestInput.focus();
+        }
+      }
+    }
+
     return { success: true, x, y, tag: el.tagName };
   }
   const event = new MouseEvent("click", {
@@ -195,10 +211,19 @@ export function clickAtCoordinate(x: number, y: number): ActionResult {
 }
 
 export function clickByName(name: string, exactMatch = false): ActionResult {
+  const isMatch = (text: string) =>
+    exactMatch
+      ? text.toLowerCase() === name.toLowerCase()
+      : text.toLowerCase().includes(name.toLowerCase());
+
+  // 1. Check interactive text elements first
   const selectors = [
     "button",
     "a",
     '[role="button"]',
+    '[role="link"]',
+    '[role="menuitem"]',
+    '[role="option"]',
     'input[type="button"]',
     'input[type="submit"]',
   ];
@@ -209,16 +234,48 @@ export function clickByName(name: string, exactMatch = false): ActionResult {
         el.textContent?.trim() ||
         inputEl.value ||
         el.getAttribute("aria-label") ||
+        el.title ||
         "";
-      const matches = exactMatch
-        ? text.toLowerCase() === name.toLowerCase()
-        : text.toLowerCase().includes(name.toLowerCase());
-      if (matches) {
+      if (text && isMatch(text)) {
         el.click();
         return { success: true, element: el.tagName, text };
       }
     }
   }
+
+  // 2. Fallback: Check general text nodes for fuzzy finding elements that aren't natively tagged well
+  const treeWalker = document.createTreeWalker(
+    document.body,
+    NodeFilter.SHOW_TEXT,
+    null,
+  );
+  let currentNode: Node | null;
+  while ((currentNode = treeWalker.nextNode())) {
+    if (currentNode.nodeValue && isMatch(currentNode.nodeValue.trim())) {
+      const target = currentNode.parentElement;
+      if (target) {
+        // Try to find if it has an interactive wrapper we should trigger instead
+        const clickableParent = target.closest(
+          "a, button, [role='button'], [role='link']",
+        ) as HTMLElement;
+        if (clickableParent) {
+          clickableParent.click();
+          return {
+            success: true,
+            element: clickableParent.tagName,
+            text: clickableParent.textContent?.trim() || "",
+          };
+        }
+        target.click();
+        return {
+          success: true,
+          element: target.tagName,
+          text: target.textContent?.trim() || "",
+        };
+      }
+    }
+  }
+
   return { success: false, error: `No element found matching: "${name}"` };
 }
 
@@ -293,6 +350,20 @@ export function pressEnterOn(identifier: string): ActionResult {
   input.focus();
   dispatchEnterSequence(input);
   return { success: true, name: describeTextLikeElement(input) };
+}
+
+export function fillActiveInput(text: string): ActionResult {
+  const active = document.activeElement as HTMLElement | null;
+  if (
+    active instanceof HTMLInputElement ||
+    active instanceof HTMLTextAreaElement ||
+    (active &&
+      (active.getAttribute("contenteditable") === "true" ||
+        active.getAttribute("role") === "textbox"))
+  ) {
+    return setTextLikeElementValue(active, text);
+  }
+  return { success: false, error: "No active input element to fill" };
 }
 
 export function typeText(text: string): ActionResult {
@@ -1219,6 +1290,7 @@ export type ActionType =
   | { type: "pressKey"; key: string }
   | { type: "pressEnterOn"; identifier: string }
   | { type: "typeText"; text: string }
+  | { type: "fillActiveInput"; text: string }
   | { type: "selectOption"; identifier: string; value: string }
   | { type: "setCheckbox"; identifier: string; checked?: boolean }
   | { type: "selectRadio"; identifier: string; value: string }
@@ -1235,7 +1307,8 @@ export type ActionType =
     }
   | { type: "uploadFileInDom"; identifier: string; keyword: string }
   | { type: "getPageStatus" }
-  | { type: "getWebsiteContent" };
+  | { type: "getWebsiteContent" }
+  | { type: "takeScreenshot" };
 
 export async function executeAction(
   action: ActionType,
@@ -1271,6 +1344,8 @@ export async function executeAction(
       return pressEnterOn(action.identifier);
     case "typeText":
       return typeText(action.text);
+    case "fillActiveInput":
+      return fillActiveInput(action.text);
     case "selectOption":
       return selectOption(action.identifier, action.value);
     case "setCheckbox":
@@ -1289,6 +1364,19 @@ export async function executeAction(
       return getPageStatus();
     case "getWebsiteContent":
       return getWebsiteContent();
+    case "takeScreenshot":
+      return new Promise((resolve) => {
+        chrome.runtime.sendMessage({ type: "TAKE_SCREENSHOT" }, (response) => {
+          if (chrome.runtime.lastError) {
+            resolve({
+              success: false,
+              error: chrome.runtime.lastError.message,
+            });
+          } else {
+            resolve(response);
+          }
+        });
+      });
     default:
       return { success: false, error: "Unknown action type" };
   }
@@ -1326,6 +1414,8 @@ export function describeAction(action: ActionType): string {
       return `Press Enter on "${action.identifier}"`;
     case "typeText":
       return `Type "${action.text}"`;
+    case "fillActiveInput":
+      return `Fill active with "${action.text}"`;
     case "selectOption":
       return `Select "${action.value}" in "${action.identifier}"`;
     case "setCheckbox":
@@ -1344,6 +1434,8 @@ export function describeAction(action: ActionType): string {
       return "Get page status";
     case "getWebsiteContent":
       return "Get website text content";
+    case "takeScreenshot":
+      return "Take screenshot of current page";
     default:
       return "Execute action";
   }

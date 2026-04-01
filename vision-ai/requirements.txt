@@ -1,4 +1,9 @@
 # Python deps for the Vision-AI service
-# Note: defaultdict is from Python stdlib (collections), no install needed.
 flask==3.0.3
 pytest==8.3.4
+google-genai==0.3.0
+pillow==10.2.0
+easyocr==1.7.1
+opencv-python-headless==4.9.0.80
+numpy==1.26.4
+python-dotenv==1.0.1
