@@ -374,6 +374,9 @@ class AgentSession:
             }
 
         result = send_command_sync(action, payload)
+        raw_success = result.get("success")
+        if not isinstance(raw_success, bool):
+            result["success"] = not bool(result.get("error"))
         if not result.get("success", False):
             err = result.get("error", "unknown error")
             result["agent_feedback"] = (

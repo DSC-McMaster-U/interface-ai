@@ -17,13 +17,24 @@ def health():
 def find_element():
     payload = request.get_json(silent=True)
     if not payload:
-        return jsonify({"error": "Invalid or missing JSON payload"}), 400
+        return (
+            jsonify({"success": False, "error": "Invalid or missing JSON payload"}),
+            400,
+        )
 
     query = payload.get("query")
     image_data = payload.get("image")
 
     if not query or not image_data:
-        return jsonify({"error": "Both 'query' and 'image' (base64) are required"}), 400
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Both 'query' and 'image' (base64) are required",
+                }
+            ),
+            400,
+        )
 
     # Strip data URI prefix if present
     if "base64," in image_data:
@@ -70,20 +81,23 @@ def find_element():
         return jsonify(result), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.post("/analyze")
 def analyze():
     payload = request.get_json(silent=True)
     if not payload:
-        return jsonify({"error": "Invalid JSON payload"}), 400
+        return jsonify({"success": False, "error": "Invalid JSON payload"}), 400
 
     image_data = payload.get("image")
     prompt = payload.get("prompt")
 
     if not image_data:
-        return jsonify({"error": "image (base64) is required"}), 400
+        return (
+            jsonify({"success": False, "error": "image (base64) is required"}),
+            400,
+        )
 
     if "base64," in image_data:
         image_data = image_data.split("base64,")[1]
@@ -119,7 +133,7 @@ def analyze():
         )
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 if __name__ == "__main__":

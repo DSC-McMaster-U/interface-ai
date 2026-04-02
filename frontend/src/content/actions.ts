@@ -1220,11 +1220,12 @@ export function getPageStatus(): PageStatus {
 // -------------------- WEBSITE CONTENT --------------------
 
 export interface WebsiteContent {
+  success: true;
   title: string;
   url: string;
   /** Extracted readable paragraphs/headings, noise-filtered */
   paragraphs: string[];
-  /** Full text joined with newlines, capped at 50 000 chars */
+  /** Full text joined with newlines, capped to keep tool output manageable */
   fullText: string;
 }
 
@@ -1233,6 +1234,10 @@ export interface WebsiteContent {
  * Strips navigation, footers, scripts, ads, etc. and returns the main prose.
  */
 export function getWebsiteContent(): WebsiteContent {
+  const MAX_BLOCKS = 80;
+  const MAX_BLOCK_CHARS = 500;
+  const MAX_FULL_TEXT_CHARS = 12_000;
+
   // Clone body so we can strip noise without touching the live DOM
   const clone = document.body.cloneNode(true) as HTMLElement;
   clone
@@ -1260,15 +1265,18 @@ export function getWebsiteContent(): WebsiteContent {
       const text = el.textContent?.replace(/\s+/g, " ").trim();
       if (text && text.length > 20 && !seen.has(text)) {
         seen.add(text);
-        paragraphs.push(text);
+        paragraphs.push(text.substring(0, MAX_BLOCK_CHARS));
       }
     });
 
+  const trimmedParagraphs = paragraphs.slice(0, MAX_BLOCKS);
+
   return {
+    success: true,
     title: document.title,
     url: window.location.href,
-    paragraphs: paragraphs.slice(0, 200),
-    fullText: paragraphs.slice(0, 200).join("\n\n").substring(0, 50_000),
+    paragraphs: trimmedParagraphs,
+    fullText: trimmedParagraphs.join("\n\n").substring(0, MAX_FULL_TEXT_CHARS),
   };
 }
 
@@ -1373,7 +1381,16 @@ export async function executeAction(
               error: chrome.runtime.lastError.message,
             });
           } else {
-            resolve(response);
+            const payload =
+              response && typeof response === "object"
+                ? (response as Record<string, unknown>)
+                : {};
+            resolve({
+              success: payload.success === true,
+              ...(payload.success === true
+                ? { data: payload.data }
+                : { error: String(payload.error || "Screenshot failed") }),
+            });
           }
         });
       });

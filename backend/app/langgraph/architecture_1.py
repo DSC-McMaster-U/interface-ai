@@ -418,6 +418,7 @@ def run_architecture_1(
 
         if res.get("success") and press_enter:
             tracked_send("pressEnter", {})
+        return res
 
     @tool
     def pressEnter() -> dict[str, Any]:
@@ -487,7 +488,12 @@ def run_architecture_1(
 
             description = vision_data.get("description", "No description returned.")
             emit(f"Vision AI Description: {description}")
-            return {"success": True, "message": description}
+            return {
+                "success": True,
+                "message": description,
+                "description": description,
+                "vision_used": True,
+            }
 
         except Exception as e:
             return {
@@ -889,7 +895,7 @@ def run_architecture_1(
                 content=(
                     f"Task is not complete yet. Reason: {reason}. "
                     f"Suggested next direction: {next_step_hint}. "
-                    "Continue executing the task based on the current state. Take the next logical step."
+                    "Try a different approach and continue."
                 )
             ),
         ]
