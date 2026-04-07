@@ -7,6 +7,8 @@ Ask it to “set up an AWS instance,” “book a flight,” or “open my calcu
 
 By combining intent recognition, vision-based action execution, and contextual awareness, InterfaceAI goes beyond existing tools with autonomous webpage exploration and personalized digital profiles—building the next generation of AI agents that make technology work for you.
 
+[View the Kanban / Task Board and more Info / Links](https://github.com/orgs/DSC-McMaster-U/projects/18/views/1?pane=issue&itemId=170290104&issue=DSC-McMaster-U%7Cinterface-ai%7C86)
+
 ---
 
 ### 🔑 Key Features (Planned for MVP)
