@@ -50,6 +50,55 @@ By combining intent recognition, vision-based action execution, and contextual a
 
 ---
 
+### System Diagrams
+
+Architecture
+- Each service is isolated to allow for independant scaling
+
+<img width="574" height="697" alt="image" src="https://github.com/user-attachments/assets/f8cc24f5-f2ea-4fc6-b5a3-f1b45428616b" />
+
+
+
+User Interface
+- Frictionless, Clean, Modern (Liquid Glass inspired design)
+
+<img width="1209" height="402" alt="image" src="https://github.com/user-attachments/assets/138fca6d-db56-4c9a-8012-509075c09646" />
+
+
+
+Langgraph Loop simulating Human Browser Behavior
+- Agent can reason based on goal and use/call its tools (goto, click, fill_input, back, etc) to interact with the website
+- Session state to track when its looping and force it to do a different approach/technique
+
+<img width="379" height="704" alt="image" src="https://github.com/user-attachments/assets/ac90827e-a803-458e-8f53-0ee55ef6b42a" />
+
+
+
+Database
+- Google Sign-in / Auth
+- User level memory to store preferences and information (prefers google over yahoo search, phone number, email, last name, etc)
+- General Agent memory (learnings from previous successful/failed sessions and efficiency tips like "instead of going to youtube and typing in search bar" just do a direct "goto(https://www.youtube.com/results?search_query=xyz)"
+  
+<img width="525" height="582" alt="image" src="https://github.com/user-attachments/assets/b4f544db-a89c-4fff-9c6d-06901de58cb5" />
+
+
+
+Vision AI
+- Multi-modal model for detecting text and icons (like "gear" icon = settings page) in a screenshot
+- Can also explain what is going on in the screen and what the main blocker is
+- Used whenever the model gets stuck or for recognizing icons or for elements not part of the DOM/HTML
+
+<img width="352" height="272" alt="image" src="https://github.com/user-attachments/assets/d5883c2c-5187-4a02-b7ae-cff79f41edaf" />
+
+
+Action Execution
+- Done via a chrome extension content script so it can be done right in your current tab
+- Better compared to alternatives like playwright which open in a Chromium app (not Chrome) and within a new window/page
+- Provides the functionality to navigate pages, click elements, type into fields, select form options, upload files, scroll, and inspect on-screen content (HTML / DOM)
+- When the agent in the backend calls a tool like "click", via the websocket it is routed here and thus the approriate function is called to do the action on the screen
+
+---
+
 ## For More Information...
 
 ### [Quick Start Guide](./documentation/OVERVIEW.md) - Get started in minutes
